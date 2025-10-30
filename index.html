@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Voxel Game</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="hud">
+      <div><strong>Block:</strong> <span id="currentBlock">grass</span></div>
+      <div id="blockPalette"></div>
+      <div style="margin-top: 6px">
+        <button id="saveBtn">Save World</button>
+        <button id="loadBtn">Load World</button>
+        <button id="clearBtn">Clear Save</button>
+        <a href="https://docs.google.com/document/d/1GYod-WmRxJl89l7dxRTpEu1B-tp2sW3FFMaRxkv2sfM/edit?tab=t.0" target="_blank"><button id="MiscBtn">Credits and Game log</button></a>
+        <a href="https://docs.google.com/forms/d/e/1FAIpQLSfCWVajFY9luS-1usq6NH4JPFzu97Hp-3Xy2z0xHjdgKWDekg/viewform" target="_blank"><button id="BugBtn">Bug reporter</button></a>
+        <a href="https://docs.google.com/forms/d/e/1FAIpQLScayLIDw7cRBk3w_aKL7so7jvtvpIFT_31QfvEEbzc7oAD6yA/viewform?usp=publish-editor" target="_blank"><button id="IdeaBtn">Idea Submission</button></a>
+        <span id="saveStatus"></span>
+      </div>
+      <div style="margin-top: 6px; font-size: 13px">
+        Controls: Click to lock pointer · WASD move · Space jump · Shift crouch · Left-click remove
+        · Right-click place
+      </div>
+      <div id="fps"></div>
+      <div id="debug"></div>
+    </div>
+
+    <div class="overlay">
+      <div id="crosshair">
+        <div>
+          <div></div>
+          <div></div>
+        </div>
+      </div>
+    </div>
+    <div class="overlay">
+      <div id="startButton">pointer lock</div>
+    </div>
+    
+    <script src="https://unpkg.com/three@0.128.0/build/three.js"></script>
+    <script src="https://unpkg.com/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/simplex-noise@4.0.1/dist/simplex-noise.min.js"></script>
+    <script src="textures.js"></script>
+    <script src="Main.js"></script>
+  </body>
+</html>
