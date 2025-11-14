@@ -22,7 +22,6 @@ const BLOCK_ID = {}; // { name: id }
 const MIN_HEIGHT = 0;
 const MAX_HEIGHT = 64;
 const CHUNK_SIZE = 16;
-const MAX_GENERATE_RADIUS = getChunkDistance();;
 const TERRAIN_HEIGHT = 30; // this will affect spawn height as well
 const TERRAIN_INTENSITIES = [24, 8, 4, 2, 1];
 const TERRAIN_RESOLUTIONS = [0.003, 0.01, 0.02, 0.05, 0.1];
@@ -47,6 +46,7 @@ let raycaster, mouse;
 const chunks = {};
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false });
 const textureLoader = new THREE.TextureLoader();
+let chunkRadius = 5;
 let seed;
 let terrainHeightNoise;
 
@@ -740,14 +740,14 @@ function generateChunksAroundPlayer() {
 
     const [cx, cz] = keyToArray(ck);
     // Check if distance is too far
-    if (Math.abs(cx - pcx) > MAX_GENERATE_RADIUS || Math.abs(cz - pcz) > MAX_GENERATE_RADIUS) {
+    if (Math.abs(cx - pcx) > chunkRadius || Math.abs(cz - pcz) > chunkRadius) {
       unloadChunk(chunk);
     }
   }
 
   // Generate nearby chunks with radius in a square formation
-  for (let dx = -MAX_GENERATE_RADIUS; dx <= MAX_GENERATE_RADIUS; dx++) {
-    for (let dz = -MAX_GENERATE_RADIUS; dz <= MAX_GENERATE_RADIUS; dz++) {
+  for (let dx = -chunkRadius; dx <= chunkRadius; dx++) {
+    for (let dz = -chunkRadius; dz <= chunkRadius; dz++) {
       generateChunk(pcx + dx, pcz + dz);
     }
   }
@@ -1072,28 +1072,20 @@ function getUserSeed() {
   seed = prompt("Enter a seed or leave blank for a random one");
   if (!seed) seed = Math.floor(Math.random() * 1000000000000000).toString();
 }
-function getChunkDistance() {
-  const defaultValue = 5;
-  let userInput = prompt("Enter chunk distance (integer only, it will default if its blank or not an integer, and be careful of lag)");
 
-  if (userInput === null || userInput.trim() === "") {
-    return defaultValue;
-  }
+/** Get the chunk distance from the user */
+function getUserChunkRadius() {
+  let userInput = prompt("Enter chunk radius (integer) or leave blank for default");
+  if (!userInput) return;
 
-  let numberValue = parseFloat(userInput);
+  let numberValue = parseInt(userInput);
+  if (!numberValue) return;
 
-  if (isNaN(numberValue)) {
-    return defaultValue;
-  }
-
-  if (numberValue !== parseInt(userInput, 10)) {
-    return defaultValue;
-  }
-
-  return parseInt(numberValue, 10);
+  chunkRadius = numberValue;
 }
 
 try {
+  getUserChunkRadius();
   getUserSeed();
   setupUI();
   init();
