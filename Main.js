@@ -19,13 +19,18 @@ const BLOCK_TYPES = [
 ];
 const BLOCK_ID = {}; // { name: id }
 
+const CUBE_SIZE = 1;
+
 const MIN_HEIGHT = 0;
 const MAX_HEIGHT = 64;
 const CHUNK_SIZE = 16;
 const TERRAIN_HEIGHT = 30; // this will affect spawn height as well
 const TERRAIN_INTENSITIES = [24, 8, 4, 2, 1];
 const TERRAIN_RESOLUTIONS = [0.003, 0.01, 0.02, 0.05, 0.1];
-const CUBE_SIZE = 1;
+const TREE_CANOPY_RADIUS = 3;
+// Controls how quickly leaf density decreases going further away from the center
+const TREE_FOLIAGE_FALLOFF = 0.2;
+const TREE_CHANCE_PER_BLOCK = 0.002;
 
 const PLAYER_SPEED = 6;
 const PLAYER_JUMP_SPEED = 10;
@@ -34,6 +39,7 @@ const PLAYER_SIZE = new THREE.Vector3(0.6, 1.8, 0.6);
 const CAM_OFFSET = new THREE.Vector3(0, 0.7, 0);
 let PLAYER_REACH = 5;
 // /\ I turned it into a "let" variable because we could use if for cool mechanics later.
+
 const EPSILON = 1e-6;
 
 // 3d rendering stuff
@@ -42,7 +48,7 @@ let raycaster, mouse;
 
 // World & world gen
 // store chunks by key
-// { "cx,cz": { blocks: [{ id }] }, mesh, updateMesh, loaded, generated } }
+// { "cx,cz": { blocks: [{ id }] }, mesh, updateMesh, loaded } }
 const chunks = {};
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false });
 const textureLoader = new THREE.TextureLoader();
@@ -89,6 +95,16 @@ function keyToArray(k) {
 /** Get the chunk's generation rng from xz coords */
 function chunkRng(cx, cz) {
   return new Alea(`${seed},${cx},${cz}`);
+}
+
+/** Get a location's generation rng from block xz coords */
+function locationRng(x, z) {
+  return new Alea(`${seed},${x},_,${z}`);
+}
+
+/** Get a block's generation rng from xyz coords */
+function blockRng(x, y, z) {
+  return new Alea(`${seed},${x},${y},${z}`);
 }
 
 /** Convert a number 0-63 to its base64 representation character */
@@ -533,6 +549,15 @@ function isBlockAt(x, y, z) {
   return !!chunk.blocks[key(x, y, z)];
 }
 
+/** Determines if a block is in the chunk */
+function isBlockInChunk(x, z, cx, cz) {
+  const minx = cx * CHUNK_SIZE;
+  const maxx = minx + CHUNK_SIZE;
+  const minz = cz * CHUNK_SIZE;
+  const maxz = minz + CHUNK_SIZE;
+  return minx <= x && x < maxx && minz <= z && z < maxz;
+}
+
 /** Find the y of the top block */
 function findTopBlockY(x, z) {
   for (let y = MAX_HEIGHT; y >= MIN_HEIGHT; y--) {
@@ -570,40 +595,67 @@ function createBlockRangeHitboxes(x1, y1, z1, x2, y2, z2) {
 
 /** Place a block with the id at the location */
 function placeBlock(id, x, y, z) {
-  const k = key(x, y, z);
   let chunk = getBlockChunk(x, z);
 
   if (!chunk) {
-    // Chunk doesn't exist - create new one
-    const ck = blockChunkKey(x, z);
-    chunks[ck] = { blocks: {}, loaded: false, generated: false };
-    chunk = chunks[ck];
+    // Chunk doesn't exist - generate it
+    const [cx, cz] = keyToArray(blockChunkKey(x, z));
+    generateChunk(cx, cz);
   }
-  // Stop if already exists
-  if (chunk.blocks[k]) return false;
 
-  chunk.blocks[k] = { id };
-  chunk.updateMesh = true;
-
-  return true;
+  placeBlockKnownChunk(id, x, y, z, chunk);
 }
 
 /** Remove a block at the specified locatoin */
 function removeBlock(x, y, z) {
+  const chunk = getBlockChunk(x, z);
+
+  // Stop if chunk doesn't exist
+  if (!chunk) return;
+
+  removeBlockKnownChunk(x, y, z, chunk);
+}
+
+/** Place a block if it is in the chunk */
+function placeBlockInChunk(id, x, y, z, cx, cz) {
+  if (isBlockInChunk(x, z, cx, cz)) placeBlock(id, x, y, z);
+}
+
+/** Remove a block if it is in the chunk */
+function removeBlockInChunk(x, y, z, cx, cz) {
+  if (isBlockInChunk(x, z, cx, cz)) removeBlock(x, y, z);
+}
+
+/** Place a block where it is KNOWN to be in the chunk */
+function placeBlockKnownChunk(id, x, y, z, chunk) {
   const k = key(x, y, z);
-  let chunk = getBlockChunk(x, z);
+
+  // Stop if already exists
+  if (chunk.blocks[k]) return;
+
+  chunk.blocks[k] = { id };
+  chunk.updateMesh = true;
+}
+
+/** Remove a block where it is KNOWN to be in the chunk */
+function removeBlockKnownChunk(x, y, z, chunk) {
+  const k = key(x, y, z);
 
   // Stop if block doesn't exist
-  if (!chunk || !chunk.blocks[k]) return false;
+  if (!chunk.blocks[k]) return;
 
   delete chunk.blocks[k];
   chunk.updateMesh = true;
+}
 
-  return true;
+/** Get the terrain height (y of block above top) at the xz coordinates */
+function getTerrainHeight(x, z) {
+  const noise = terrainHeightNoise(x, z);
+  return Math.floor(TERRAIN_HEIGHT + noise);
 }
 
 /** Generate a tree with root at the specified location */
-function generateTree(x, y, z, rng) {
+function generateTree(x, y, z, cx, cz, rng) {
   // Randomly generate trunk height
   const minTrunkHeight = 6;
   const maxTrunkHeight = 8;
@@ -611,33 +663,26 @@ function generateTree(x, y, z, rng) {
 
   // Build the trunk
   for (let i = 0; i < trunkHeight; i++) {
-    placeBlock(BLOCK_ID.wood, x, y + i, z);
+    placeBlockInChunk(BLOCK_ID.wood, x, y + i, z, cx, cz);
   }
 
   // Determine canopy position
   const canopyCenterY = y + trunkHeight - 2;
-  const canopyRadius = 3;
-  const squareCanopyRadius = canopyRadius * canopyRadius;
-
-  // Controls how quickly leaf density decreases going further away from the center
-  const foliageFalloff = 0.2;
+  const squareCanopyRadius = TREE_CANOPY_RADIUS * TREE_CANOPY_RADIUS;
 
   // Build a sphere of leaves around the top of the trunk
-  for (let ly = -canopyRadius; ly <= canopyRadius; ly++) {
-    for (let lx = -canopyRadius; lx <= canopyRadius; lx++) {
-      for (let lz = -canopyRadius; lz <= canopyRadius; lz++) {
+  for (let ly = -TREE_CANOPY_RADIUS; ly <= TREE_CANOPY_RADIUS; ly++) {
+    for (let lx = -TREE_CANOPY_RADIUS; lx <= TREE_CANOPY_RADIUS; lx++) {
+      for (let lz = -TREE_CANOPY_RADIUS; lz <= TREE_CANOPY_RADIUS; lz++) {
         const squareDist = lx * lx + ly * ly + lz * lz;
 
         // Create a slightly irregular sphere shape by adding randomness
-        const generateChance = 1 - (squareDist / squareCanopyRadius) * foliageFalloff;
+        const generateChance = 1 - (squareDist / squareCanopyRadius) * TREE_FOLIAGE_FALLOFF;
         if (squareDist < squareCanopyRadius && rng() < generateChance) {
-          placeBlock(BLOCK_ID.leaves, x + lx, canopyCenterY + ly, z + lz);
+          placeBlockInChunk(BLOCK_ID.leaves, x + lx, canopyCenterY + ly, z + lz, cx, cz);
         }
       }
     }
-
-    // Fix trunk if replaced
-    placeBlock(BLOCK_ID.wood, x, y + trunkHeight - 1, z);
   }
 }
 
@@ -647,34 +692,24 @@ function generateChunk(cx, cz) {
 
   // Check if chunk exists
   if (chunks[ck]) {
-    if (chunks[ck].generated) {
-      // Chunk already generated, reload if needed and stop
-      if (!chunks[ck].loaded) reloadChunk(chunks[ck]);
-      return;
-    } else {
-      // Chunk not generated, continue generation
-      chunks[ck].loaded = true;
-      chunks[ck].generated = true;
-    }
+    // Chunk already generated, reload if needed and stop
+    if (!chunks[ck].loaded) reloadChunk(chunks[ck]);
+    return;
   } else {
     // Chunk does not exist, create new one
-    chunks[ck] = { blocks: {}, loaded: true, generated: true };
+    chunks[ck] = { blocks: {}, loaded: true, };
   }
 
   const startX = cx * CHUNK_SIZE;
   const startZ = cz * CHUNK_SIZE;
-  const rng = chunkRng(cx, cz);
 
   // Generate terrain
-  for (let i = 0; i < CHUNK_SIZE; i++) {
-    for (let j = 0; j < CHUNK_SIZE; j++) {
-      // Calculate coordinates
-      const wx = startX + i;
-      const wz = startZ + j;
-
-      // Use noise to generate height
-      const noise = terrainHeightNoise(wx, wz);
-      const height = Math.floor(TERRAIN_HEIGHT + noise);
+  for (let x = 0; x < CHUNK_SIZE; x++) {
+    for (let z = 0; z < CHUNK_SIZE; z++) {
+      // Calculate coordinates & height
+      const wx = startX + x;
+      const wz = startZ + z;
+      const height = getTerrainHeight(wx, wz);
 
       // Place blocks
       for (let y = 0; y < height; y++) {
@@ -686,21 +721,16 @@ function generateChunk(cx, cz) {
   }
 
   // Generate trees
-  // 3 tree spawning attempts per chunk with 35% success for each
-  for (let t = 0; t < 3; t++) {
-    if (rng() < 0.35) {
-      // Randomly generate tree location
-      const treeX = startX + Math.floor(rng() * CHUNK_SIZE);
-      const treeZ = startZ + Math.floor(rng() * CHUNK_SIZE);
-      const topY = findTopBlockY(treeX, treeZ);
+  for (let x = -TREE_CANOPY_RADIUS; x < CHUNK_SIZE + TREE_CANOPY_RADIUS; x++) {
+    for (let z = -TREE_CANOPY_RADIUS; z < CHUNK_SIZE + TREE_CANOPY_RADIUS; z++) {
+      // Get locatoin rng
+      const wx = startX + x;
+      const wz = startZ + z;
+      const lrng = locationRng(wx, wz);
 
-      // Place tree if valid
-      if (topY !== null) {
-        const k = key(treeX, topY, treeZ);
-        const rootBlock = chunks[ck].blocks[k];
-
-        if (rootBlock.id == BLOCK_ID.grass) generateTree(treeX, topY + 1, treeZ, rng);
-      }
+      // Place tree
+      const height = getTerrainHeight(wx, wz);
+      if (lrng() < TREE_CHANCE_PER_BLOCK) generateTree(wx, height, wz, cx, cz, lrng);
     }
   }
 }
@@ -860,7 +890,7 @@ function generateSaveCode() {
   for (const [ck, chunk] of Object.entries(chunks)) {
     chunksEncoded[ck] = {
       blocks: generateChunkSaveCode(ck, chunk),
-      generated: chunk.generated,
+      generated: true,
     };
   }
 
@@ -896,7 +926,6 @@ function loadSaveCode(save) {
   for (const [ck, chunk] of Object.entries(save.chunks)) {
     chunks[ck] = {
       blocks: decodeChunkSaveCode(ck, chunk.blocks),
-      generated: chunk.generated,
       loaded: false,
       updateMesh: true,
     };
