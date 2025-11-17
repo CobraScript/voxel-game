@@ -1,13 +1,6 @@
-// --- Basic voxel sandbox using three.js ---
-// Current goals:
-// [DONE] Fixing controls, they don't seem to move in the direction of the mouse.
-// [DONE] Fixing collision, a way we could do this is by giving indvidual blocks
-// a hitbox and checking for that hitbox. Then we set the player's position right above
-// the block with said hitbox. Same with the side and bottom of a block.
-// [DONE] Implementing chunks
-// [DONE] Adding lag effiency
-// Adding more stone plus cave systems to world gen.
-// Making world gen more unique overall.
+/**************
+ * VOXEL GAME *
+ **************/
 
 // Constants:
 const BLOCK_TYPES = [
@@ -606,7 +599,7 @@ function placeBlock(id, x, y, z) {
   placeBlockKnownChunk(id, x, y, z, chunk);
 }
 
-/** Remove a block at the specified locatoin */
+/** Remove a block at the specified location */
 function removeBlock(x, y, z) {
   const chunk = getBlockChunk(x, z);
 
@@ -697,7 +690,7 @@ function generateChunk(cx, cz) {
     return;
   } else {
     // Chunk does not exist, create new one
-    chunks[ck] = { blocks: {}, loaded: true, };
+    chunks[ck] = { blocks: {}, loaded: true };
   }
 
   const startX = cx * CHUNK_SIZE;
@@ -723,7 +716,7 @@ function generateChunk(cx, cz) {
   // Generate trees
   for (let x = -TREE_CANOPY_RADIUS; x < CHUNK_SIZE + TREE_CANOPY_RADIUS; x++) {
     for (let z = -TREE_CANOPY_RADIUS; z < CHUNK_SIZE + TREE_CANOPY_RADIUS; z++) {
-      // Get locatoin rng
+      // Get location rng
       const wx = startX + x;
       const wz = startZ + z;
       const lrng = locationRng(wx, wz);
