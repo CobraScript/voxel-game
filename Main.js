@@ -1,13 +1,6 @@
-// --- Basic voxel sandbox using three.js ---
-// Current goals:
-// [DONE] Fixing controls, they don't seem to move in the direction of the mouse.
-// [DONE] Fixing collision, a way we could do this is by giving indvidual blocks
-// a hitbox and checking for that hitbox. Then we set the player's position right above
-// the block with said hitbox. Same with the side and bottom of a block.
-// [DONE] Implementing chunks
-// [DONE] Adding lag effiency
-// Adding more stone plus cave systems to world gen.
-// Making world gen more unique overall.
+/**************
+ * VOXEL GAME *
+ **************/
 
 // Constants:
 const BLOCK_TYPES = [
@@ -19,13 +12,18 @@ const BLOCK_TYPES = [
 ];
 const BLOCK_ID = {}; // { name: id }
 
+const CUBE_SIZE = 1;
+
 const MIN_HEIGHT = 0;
 const MAX_HEIGHT = 64;
 const CHUNK_SIZE = 16;
-const MAX_GENERATE_RADIUS = 5;
-const LAND_INTENSITY = 0.3;
-const WORLD_DEPTH = 30; // this will affect spawn height as well
-const CUBE_SIZE = 1;
+const TERRAIN_HEIGHT = 30; // this will affect spawn height as well
+const TERRAIN_INTENSITIES = [24, 8, 4, 2, 1];
+const TERRAIN_RESOLUTIONS = [0.003, 0.01, 0.02, 0.05, 0.1];
+const TREE_CANOPY_RADIUS = 3;
+// Controls how quickly leaf density decreases going further away from the center
+const TREE_FOLIAGE_FALLOFF = 0.2;
+const TREE_CHANCE_PER_BLOCK = 0.002;
 
 const PLAYER_SPEED = 6;
 const PLAYER_JUMP_SPEED = 10;
@@ -34,6 +32,7 @@ const PLAYER_SIZE = new THREE.Vector3(0.6, 1.8, 0.6);
 const CAM_OFFSET = new THREE.Vector3(0, 0.7, 0);
 let PLAYER_REACH = 5;
 // /\ I turned it into a "let" variable because we could use if for cool mechanics later.
+
 const EPSILON = 1e-6;
 
 // 3d rendering stuff
@@ -42,10 +41,13 @@ let raycaster, mouse;
 
 // World & world gen
 // store chunks by key
-// { "cx,cz": { blocks: [{ id }] }, mesh, updateMesh, loaded, generated } }
+// { "cx,cz": { blocks: [{ id }] }, mesh, updateMesh, loaded, modified } }
 const chunks = {};
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false });
 const textureLoader = new THREE.TextureLoader();
+let chunkRadius = 5;
+let seed;
+let terrainHeightNoise;
 
 // Player
 const moveControls = {
@@ -56,7 +58,7 @@ const moveControls = {
   up: false,
   down: false,
 };
-let position = new THREE.Vector3(0, WORLD_DEPTH + 1, 0);
+let position = new THREE.Vector3(0, TERRAIN_HEIGHT + 1, 0);
 let rotation = new THREE.Euler();
 let velocity = new THREE.Vector3();
 let canJump = false;
@@ -65,6 +67,8 @@ let currentBlock = 0; // grass
 // Misc
 let lastFrameTime;
 let fps;
+
+/*************** UTILITY ***************/
 
 /** Get the key of a block from xyz coords */
 function key(x, y, z) {
@@ -81,12 +85,27 @@ function keyToArray(k) {
   return k.split(",").map(n => parseInt(n));
 }
 
+/** Get the chunk's generation rng from xz coords */
+function chunkRng(cx, cz) {
+  return new Alea(`${seed},${cx},${cz}`);
+}
+
+/** Get a location's generation rng from block xz coords */
+function locationRng(x, z) {
+  return new Alea(`${seed},${x},_,${z}`);
+}
+
+/** Get a block's generation rng from xyz coords */
+function blockRng(x, y, z) {
+  return new Alea(`${seed},${x},${y},${z}`);
+}
+
 /** Convert a number 0-63 to its base64 representation character */
 function base64char(num) {
   if (num < 26) return String.fromCharCode(num + 65); // A-Z: 0-25
   if (num < 52) return String.fromCharCode(num + 71); // a-z: 26-51
   else if (num < 62) return String.fromCharCode(num - 4); // 0-9: 52-61
-  else if (num == 62) return "+"; // +: 62
+  else if (num === 62) return "+"; // +: 62
   else return "/"; // /: 63
 }
 
@@ -131,9 +150,10 @@ function init() {
   controls = new THREE.PointerLockControls(camera, document.body);
   scene.add(controls.getObject());
 
-  // Generate block types
+  // Generate stuff
   generateBlockIDs();
   generateBlockMaterials();
+  initRandom();
 
   // Event listeners
   window.addEventListener("resize", onWindowResize, false);
@@ -148,6 +168,12 @@ function generateBlockIDs() {
   BLOCK_TYPES.forEach((type, i) => {
     BLOCK_ID[type.name] = i;
   });
+}
+
+/** Initialize all random functions from the global seed */
+function initRandom() {
+  const rng = new Alea(seed);
+  generateNoiseFunction(rng());
 }
 
 /** Generate materials for each block type */
@@ -175,6 +201,23 @@ function generateBlockMaterials() {
       blockType.materials.push(material);
     }
   }
+}
+
+/** Generate the noise function */
+function generateNoiseFunction(noiseSeed) {
+  // Generate individual functions
+  const rng = new Alea(noiseSeed);
+  const noiseFuncs = TERRAIN_INTENSITIES.map(_ => createNoise2D(new Alea(rng())));
+
+  // Set the combined function
+  terrainHeightNoise = (x, y) =>
+    noiseFuncs
+      .map((noise, i) => {
+        const intensity = TERRAIN_INTENSITIES[i];
+        const resolution = TERRAIN_RESOLUTIONS[i];
+        return noise(x * resolution, y * resolution) * intensity;
+      })
+      .reduce((total, n) => total + n, 0);
 }
 
 /** Function called every frame for processing and rendering */
@@ -297,7 +340,6 @@ function correctCollision(moveDir, blockBB) {
  * returning false if not
  */
 function isPlayerColliding() {
-  const blockDim = new THREE.Vector3(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
   const playerBB = getPlayerBB();
 
   // Bounds for blocks that the player can be colliding with
@@ -312,13 +354,8 @@ function isPlayerColliding() {
     for (let y = yMin; y <= yMax; y++) {
       for (let z = zMin; z <= zMax; z++) {
         if (isBlockAt(x, y, z)) {
-          // Compute the block's bounding box
-          const blockMin = new THREE.Vector3(x * CUBE_SIZE, y * CUBE_SIZE, z * CUBE_SIZE);
-          const blockMax = blockMin.clone().add(blockDim);
-          const blockBB = new THREE.Box3(blockMin, blockMax);
-
-          // Return if intersection
-          if (playerBB.intersectsBox(blockBB)) return blockBB;
+          const blockBB = playerCollidesBlock(x, y, z);
+          if (blockBB) return blockBB;
         }
       }
     }
@@ -326,6 +363,24 @@ function isPlayerColliding() {
 
   // No intersection
   return false;
+}
+
+/**
+ * Determine if the player collides with a block in that position,
+ * returnomg the block's bounding box if so,
+ * returning false if not
+ */
+function playerCollidesBlock(x, y, z) {
+  const blockDim = new THREE.Vector3(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
+  const playerBB = getPlayerBB();
+
+  // Compute the block's bounding box
+  const blockMin = new THREE.Vector3(x * CUBE_SIZE, y * CUBE_SIZE, z * CUBE_SIZE);
+  const blockMax = blockMin.clone().add(blockDim);
+  const blockBB = new THREE.Box3(blockMin, blockMax);
+
+  // Return if intersection
+  if (playerBB.intersectsBox(blockBB)) return blockBB;
 }
 
 /** Retrieve the player's bounding box */
@@ -425,7 +480,7 @@ function onMouseDown(event) {
 
     if (event.button === 0) {
       // Left click
-      removeBlock(pos[0], pos[1], pos[2]);
+      removeBlock(pos[0], pos[1], pos[2], false);
     } else if (event.button === 2) {
       // Right click: place position is translated by the normal of the face
       const face = first.face;
@@ -434,9 +489,10 @@ function onMouseDown(event) {
       const placeY = pos[1] + normal.y;
       const placeZ = pos[2] + normal.z;
 
-      placeBlock(currentBlock, placeX, placeY, placeZ);
       // Prevent placing inside player
-      if (isPlayerColliding()) removeBlock(placeX, placeY, placeZ);
+      if (!playerCollidesBlock(placeX, placeY, placeZ)) {
+        placeBlock(currentBlock, placeX, placeY, placeZ, false);
+      }
     }
   }
 }
@@ -499,6 +555,15 @@ function isBlockAt(x, y, z) {
   return !!chunk.blocks[key(x, y, z)];
 }
 
+/** Determines if a block is in the chunk */
+function isBlockInChunk(x, z, cx, cz) {
+  const minx = cx * CHUNK_SIZE;
+  const maxx = minx + CHUNK_SIZE;
+  const minz = cz * CHUNK_SIZE;
+  const maxz = minz + CHUNK_SIZE;
+  return minx <= x && x < maxx && minz <= z && z < maxz;
+}
+
 /** Find the y of the top block */
 function findTopBlockY(x, z) {
   for (let y = MAX_HEIGHT; y >= MIN_HEIGHT; y--) {
@@ -535,76 +600,97 @@ function createBlockRangeHitboxes(x1, y1, z1, x2, y2, z2) {
 }
 
 /** Place a block with the id at the location */
-function placeBlock(id, x, y, z) {
-  const k = key(x, y, z);
+function placeBlock(id, x, y, z, generated = true) {
   let chunk = getBlockChunk(x, z);
 
   if (!chunk) {
-    // Chunk doesn't exist - create new one
-    const ck = blockChunkKey(x, z);
-    chunks[ck] = { blocks: {}, loaded: false, generated: false };
-    chunk = chunks[ck];
+    // Chunk doesn't exist - generate it
+    const [cx, cz] = keyToArray(blockChunkKey(x, z));
+    generateChunk(cx, cz);
   }
-  // Stop if already exists
-  if (chunk.blocks[k]) return false;
 
-  chunk.blocks[k] = { id };
-  chunk.updateMesh = true;
-
-  return true;
+  placeBlockKnownChunk(id, x, y, z, chunk, generated);
 }
 
-/** Remove a block at the specified locatoin */
-function removeBlock(x, y, z) {
+/** Remove a block at the specified location */
+function removeBlock(x, y, z, generated = true) {
+  const chunk = getBlockChunk(x, z);
+
+  // Stop if chunk doesn't exist
+  if (!chunk) return;
+
+  removeBlockKnownChunk(x, y, z, chunk, generated);
+}
+
+/** Place a block if it is in the chunk */
+function placeBlockInChunk(id, x, y, z, cx, cz, generated = true) {
+  if (isBlockInChunk(x, z, cx, cz)) placeBlock(id, x, y, z, generated);
+}
+
+/** Remove a block if it is in the chunk */
+function removeBlockInChunk(x, y, z, cx, cz, generated = true) {
+  if (isBlockInChunk(x, z, cx, cz)) removeBlock(x, y, z, generated);
+}
+
+/** Place a block where it is KNOWN to be in the chunk */
+function placeBlockKnownChunk(id, x, y, z, chunk, generated = true) {
   const k = key(x, y, z);
-  let chunk = getBlockChunk(x, z);
+
+  // Stop if already exists
+  if (chunk.blocks[k]) return;
+
+  chunk.blocks[k] = { id };
+  if (!generated) chunk.modified = true;
+  chunk.updateMesh = true;
+}
+
+/** Remove a block where it is KNOWN to be in the chunk */
+function removeBlockKnownChunk(x, y, z, chunk, generated = true) {
+  const k = key(x, y, z);
 
   // Stop if block doesn't exist
-  if (!chunk || !chunk.blocks[k]) return false;
+  if (!chunk.blocks[k]) return;
 
   delete chunk.blocks[k];
+  if (!generated) chunk.modified = true;
   chunk.updateMesh = true;
+}
 
-  return true;
+/** Get the terrain height (y of block above top) at the xz coordinates */
+function getTerrainHeight(x, z) {
+  const noise = terrainHeightNoise(x, z);
+  return Math.floor(TERRAIN_HEIGHT + noise);
 }
 
 /** Generate a tree with root at the specified location */
-function generateTree(x, y, z) {
+function generateTree(x, y, z, cx, cz, rng) {
   // Randomly generate trunk height
   const minTrunkHeight = 6;
   const maxTrunkHeight = 8;
-  const trunkHeight =
-    minTrunkHeight + Math.floor(Math.random() * (maxTrunkHeight - minTrunkHeight + 1));
+  const trunkHeight = minTrunkHeight + Math.floor(rng() * (maxTrunkHeight - minTrunkHeight + 1));
 
   // Build the trunk
   for (let i = 0; i < trunkHeight; i++) {
-    placeBlock(BLOCK_ID.wood, x, y + i, z);
+    placeBlockInChunk(BLOCK_ID.wood, x, y + i, z, cx, cz);
   }
 
   // Determine canopy position
   const canopyCenterY = y + trunkHeight - 2;
-  const canopyRadius = 3;
-  const squareCanopyRadius = canopyRadius * canopyRadius;
-
-  // Controls how quickly leaf density decreases going further away from the center
-  const foliageFalloff = 0.2;
+  const squareCanopyRadius = TREE_CANOPY_RADIUS * TREE_CANOPY_RADIUS;
 
   // Build a sphere of leaves around the top of the trunk
-  for (let ly = -canopyRadius; ly <= canopyRadius; ly++) {
-    for (let lx = -canopyRadius; lx <= canopyRadius; lx++) {
-      for (let lz = -canopyRadius; lz <= canopyRadius; lz++) {
+  for (let ly = -TREE_CANOPY_RADIUS; ly <= TREE_CANOPY_RADIUS; ly++) {
+    for (let lx = -TREE_CANOPY_RADIUS; lx <= TREE_CANOPY_RADIUS; lx++) {
+      for (let lz = -TREE_CANOPY_RADIUS; lz <= TREE_CANOPY_RADIUS; lz++) {
         const squareDist = lx * lx + ly * ly + lz * lz;
 
         // Create a slightly irregular sphere shape by adding randomness
-        const generateChance = 1 - (squareDist / squareCanopyRadius) * foliageFalloff;
-        if (squareDist < squareCanopyRadius && Math.random() < generateChance) {
-          placeBlock(BLOCK_ID.leaves, x + lx, canopyCenterY + ly, z + lz);
+        const generateChance = 1 - (squareDist / squareCanopyRadius) * TREE_FOLIAGE_FALLOFF;
+        if (squareDist < squareCanopyRadius && rng() < generateChance) {
+          placeBlockInChunk(BLOCK_ID.leaves, x + lx, canopyCenterY + ly, z + lz, cx, cz);
         }
       }
     }
-
-    // Fix trunk if replaced
-    placeBlock(BLOCK_ID.wood, x, y + trunkHeight - 1, z);
   }
 }
 
@@ -614,54 +700,45 @@ function generateChunk(cx, cz) {
 
   // Check if chunk exists
   if (chunks[ck]) {
-    if (chunks[ck].generated) {
-      // Chunk already generated, reload if needed and stop
-      if (!chunks[ck].loaded) reloadChunk(chunks[ck]);
-      return;
-    } else {
-      // Chunk not generated, continue generation
-      chunks[ck].loaded = true;
-      chunks[ck].generated = true;
-    }
+    // Chunk already generated, reload if needed and stop
+    if (!chunks[ck].loaded) reloadChunk(chunks[ck]);
+    return;
   } else {
     // Chunk does not exist, create new one
-    chunks[ck] = { blocks: {}, loaded: true, generated: true };
+    chunks[ck] = { blocks: {}, loaded: true, modified: false };
   }
 
   const startX = cx * CHUNK_SIZE;
   const startZ = cz * CHUNK_SIZE;
 
   // Generate terrain
-  for (let i = 0; i < CHUNK_SIZE; i++) {
-    for (let j = 0; j < CHUNK_SIZE; j++) {
-      const wx = startX + i;
-      const wz = startZ + j;
-      const v = Math.abs(Math.sin(wx * LAND_INTENSITY) + Math.cos(wz * LAND_INTENSITY));
-      const h = Math.floor(WORLD_DEPTH + 10 * LAND_INTENSITY * v);
-      for (let y = 0; y < h; y++) {
-        const top = y === h - 1;
-        const type = top ? BLOCK_ID.grass : y >= h - 3 ? BLOCK_ID.dirt : BLOCK_ID.stone;
+  for (let x = 0; x < CHUNK_SIZE; x++) {
+    for (let z = 0; z < CHUNK_SIZE; z++) {
+      // Calculate coordinates & height
+      const wx = startX + x;
+      const wz = startZ + z;
+      const height = getTerrainHeight(wx, wz);
+
+      // Place blocks
+      for (let y = 0; y < height; y++) {
+        const top = y === height - 1;
+        const type = top ? BLOCK_ID.grass : y >= height - 3 ? BLOCK_ID.dirt : BLOCK_ID.stone;
         placeBlock(type, wx, y, wz);
       }
     }
   }
 
   // Generate trees
-  // 3 tree spawning attempts per chunk with 35% success for each
-  for (let t = 0; t < 3; t++) {
-    if (Math.random() < 0.35) {
-      // Randomly generate tree location
-      const treeX = startX + Math.floor(Math.random() * CHUNK_SIZE);
-      const treeZ = startZ + Math.floor(Math.random() * CHUNK_SIZE);
-      const topY = findTopBlockY(treeX, treeZ);
+  for (let x = -TREE_CANOPY_RADIUS; x < CHUNK_SIZE + TREE_CANOPY_RADIUS; x++) {
+    for (let z = -TREE_CANOPY_RADIUS; z < CHUNK_SIZE + TREE_CANOPY_RADIUS; z++) {
+      // Get location rng
+      const wx = startX + x;
+      const wz = startZ + z;
+      const lrng = locationRng(wx, wz);
 
-      // Place tree if valid
-      if (topY !== null) {
-        const k = key(treeX, topY, treeZ);
-        const rootBlock = chunks[ck].blocks[k];
-
-        if (rootBlock.id == BLOCK_ID.grass) generateTree(treeX, topY + 1, treeZ);
-      }
+      // Place tree
+      const height = getTerrainHeight(wx, wz);
+      if (lrng() < TREE_CHANCE_PER_BLOCK) generateTree(wx, height, wz, cx, cz, lrng);
     }
   }
 }
@@ -701,14 +778,14 @@ function generateChunksAroundPlayer() {
 
     const [cx, cz] = keyToArray(ck);
     // Check if distance is too far
-    if (Math.abs(cx - pcx) > MAX_GENERATE_RADIUS || Math.abs(cz - pcz) > MAX_GENERATE_RADIUS) {
+    if (Math.abs(cx - pcx) > chunkRadius || Math.abs(cz - pcz) > chunkRadius) {
       unloadChunk(chunk);
     }
   }
 
   // Generate nearby chunks with radius in a square formation
-  for (let dx = -MAX_GENERATE_RADIUS; dx <= MAX_GENERATE_RADIUS; dx++) {
-    for (let dz = -MAX_GENERATE_RADIUS; dz <= MAX_GENERATE_RADIUS; dz++) {
+  for (let dx = -chunkRadius; dx <= chunkRadius; dx++) {
+    for (let dz = -chunkRadius; dz <= chunkRadius; dz++) {
       generateChunk(pcx + dx, pcz + dz);
     }
   }
@@ -738,7 +815,7 @@ function generateChunkMesh(chunk) {
 
   // Helper function to add faces
   function addFaces(vertexData, poss, mat) {
-    if (poss.length == 0) return;
+    if (poss.length === 0) return;
 
     // Array of vertex data's pos repeated for every block pos translated by that block pos
     const newPositions = poss.flatMap(pos =>
@@ -812,22 +889,28 @@ function generateChunkMesh(chunk) {
   chunk.mesh = new THREE.Mesh(geometry, materials);
 }
 
+/*************** SAVING & LOADING ***************/
+
 /** Generate a save code for the current world */
 function generateSaveCode() {
   // Generate encoded chunks
   const chunksEncoded = {};
   for (const [ck, chunk] of Object.entries(chunks)) {
-    chunksEncoded[ck] = {
-      blocks: generateChunkSaveCode(ck, chunk),
-      generated: chunk.generated,
-    };
+    if (chunk.modified) {
+      chunksEncoded[ck] = {
+        blocks: generateChunkSaveCode(ck, chunk),
+        modified: true,
+      };
+    }
   }
 
-  // Encode player data
+  // Encode data
   const pos = [position.x, position.y, position.z];
   const vel = [velocity.x, velocity.y, velocity.z];
   const rot = [rotation.x, rotation.y, rotation.z];
   const save = {
+    saveVersion: 1,
+    seed,
     player: { position: pos, velocity: vel, rotation: rot, canJump },
     chunks: chunksEncoded,
   };
@@ -838,8 +921,22 @@ function generateSaveCode() {
 /** Load a save code, replacing the current world */
 function loadSaveCode(save) {
   save = JSON.parse(save);
+  const saveVersion = save.saveVersion ? save.saveVersion : 0;
+  switch (saveVersion) {
+    case 0:
+      loadSaveCode0(save);
+      break;
+    case 1:
+      loadSaveCode1(save);
+      break;
+  }
+}
 
-  // Decode and update player data
+/** Load a version 1 save code */
+function loadSaveCode1(save) {
+  // Decode and update misc data
+  seed = save.seed;
+  initRandom();
   position = new THREE.Vector3(...save.player.position);
   velocity = new THREE.Vector3(...save.player.velocity);
   camera.quaternion.setFromEuler(new THREE.Euler(...save.player.rotation, "YXZ"));
@@ -855,9 +952,41 @@ function loadSaveCode(save) {
   for (const [ck, chunk] of Object.entries(save.chunks)) {
     chunks[ck] = {
       blocks: decodeChunkSaveCode(ck, chunk.blocks),
-      generated: chunk.generated,
       loaded: false,
       updateMesh: true,
+      modified: chunk.modified,
+    };
+  }
+
+  // Generate chunks if needed
+  generateChunksAroundPlayer();
+}
+
+/** Load a version 0 save code */
+function loadSaveCode0(save) {
+  // Decode and update misc data
+  seed = "0";
+  initRandom();
+  position = new THREE.Vector3(...save.player.position);
+  velocity = new THREE.Vector3(...save.player.velocity);
+  camera.quaternion.setFromEuler(new THREE.Euler(...save.player.rotation, "YXZ"));
+  canJump = save.player.canJump;
+
+  // Delete all old chunks
+  for (const ck of Object.keys(chunks)) {
+    scene.remove(chunks[ck].mesh);
+    delete chunks[ck];
+  }
+
+  // Decode and add new chunks
+  for (const [ck, chunk] of Object.entries(save.chunks)) {
+    // Ungenerated chunks no longer supported, don't add to be generated
+    if (!chunk.generated) continue;
+    chunks[ck] = {
+      blocks: decodeChunkSaveCode(ck, chunk.blocks),
+      loaded: false,
+      updateMesh: true,
+      modified: true,
     };
   }
 }
@@ -1024,7 +1153,28 @@ function updateDebug() {
   `;
 }
 
+/*************** MISC ***************/
+
+/** Get a seed from the user */
+function getUserSeed() {
+  seed = prompt("Enter a seed or leave blank for a random one");
+  if (!seed) seed = Math.floor(Math.random() * 1000000000000000).toString();
+}
+
+/** Get the chunk distance from the user */
+function getUserChunkRadius() {
+  let userInput = prompt("Enter chunk radius (integer) or leave blank for default");
+  if (!userInput) return;
+
+  let numberValue = parseInt(userInput);
+  if (!numberValue) return;
+
+  chunkRadius = numberValue;
+}
+
 try {
+  getUserChunkRadius();
+  getUserSeed();
   setupUI();
   init();
   generateChunksAroundPlayer();
