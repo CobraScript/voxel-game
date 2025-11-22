@@ -708,6 +708,8 @@ function generateChunk(cx, cz) {
     chunks[ck] = { blocks: {}, loaded: true, modified: false };
   }
 
+  const chunk = chunks[ck];
+
   const startX = cx * CHUNK_SIZE;
   const startZ = cz * CHUNK_SIZE;
 
@@ -723,7 +725,7 @@ function generateChunk(cx, cz) {
       for (let y = 0; y < height; y++) {
         const top = y === height - 1;
         const type = top ? BLOCK_ID.grass : y >= height - 3 ? BLOCK_ID.dirt : BLOCK_ID.stone;
-        placeBlock(type, wx, y, wz);
+        placeBlockKnownChunk(type, wx, y, wz, chunk);
       }
     }
   }
@@ -799,7 +801,7 @@ function generateChunkMesh(chunk) {
   const uvs = []; // vertex texture coordinate data
   const materials = []; // material data
   const facesByID = {}; // which faces to construct by block and direction:
-  //                       { block id: [direction: [block coords: [x, y, z]]] }
+  //                       { block id: [direction: [block coords: x, y, z, ...]] }
   const geometry = new THREE.BufferGeometry(); // geometry to be constructed with faces culled
 
   // prettier-ignore
@@ -813,39 +815,42 @@ function generateChunkMesh(chunk) {
     zp: { pos: [[0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]], normal: [ 0,  0,  1], uv: [[0, 0], [1, 0], [0, 1], [1, 1]], idx: [0, 1, 2, 1, 3, 2] },
   };
 
+  const vertsPerFace = faces.xn.pos.length;
+  const idxsPerFace = faces.xn.idx.length;
+
+  // Keep track of how many vertices have been added
+  let vertexCount = 0;
+
   // Helper function to add faces
-  function addFaces(vertexData, poss, mat) {
-    if (poss.length === 0) return;
-
-    // Array of vertex data's pos repeated for every block pos translated by that block pos
-    const newPositions = poss.flatMap(pos =>
-      vertexData.pos.map(vertex => [vertex[0] + pos[0], vertex[1] + pos[1], vertex[2] + pos[2]])
-    );
-
-    // Array filled with vertex data's normal for every vertex pos for every block
-    const newNormals = Array(vertexData.pos.length * poss.length).fill(vertexData.normal);
-
-    // Array of vertex data's indices repeated for every block
-    // shifted by the corresponding index in position
-    const newIndices = Array(poss.length)
-      .fill(null)
-      .flatMap((_, i) =>
-        vertexData.idx.map(idx => idx + positions.length + i * vertexData.pos.length)
-      );
-
-    // Array of vertex data's uv repeated for every block
-    const newUVs = Array(poss.length).fill(vertexData.uv).flat();
+  function addFaces(vertexData, blockCoords, mat) {
+    if (!blockCoords.length) return;
 
     // Add group so those new vertices have the right material
-    geometry.addGroup(indices.length, vertexData.idx.length * poss.length, materials.length);
-
+    geometry.addGroup(indices.length, idxsPerFace * (blockCoords.length / 3), materials.length);
     materials.push(mat);
 
-    // Add new vertices
-    positions.push(...newPositions);
-    normals.push(...newNormals);
-    uvs.push(...newUVs);
-    indices.push(...newIndices);
+    for (let c = 0; c < blockCoords.length; c += 3) {
+      // Append vertex positions, normals, and uvs for each vertex
+      for (let i = 0; i < vertsPerFace; i++) {
+        const vert = vertexData.pos[i];
+        positions.push(
+          vert[0] + blockCoords[c + 0],
+          vert[1] + blockCoords[c + 1],
+          vert[2] + blockCoords[c + 2]
+        );
+
+        normals.push(...vertexData.normal);
+
+        uvs.push(...vertexData.uv[i]);
+      }
+
+      // Append indices for this face
+      for (let i = 0; i < idxsPerFace; i++) {
+        indices.push(vertexCount + vertexData.idx[i]);
+      }
+
+      vertexCount += vertsPerFace;
+    }
   }
 
   // Calculate all faces we need
@@ -858,12 +863,12 @@ function generateChunkMesh(chunk) {
     }
 
     // Check surrondings and add faces only if needed
-    if (!chunk.blocks[key(x - 1, y, z)]) facesByID[block.id][5].push([x, y, z]);
-    if (!chunk.blocks[key(x + 1, y, z)]) facesByID[block.id][3].push([x, y, z]);
-    if (!chunk.blocks[key(x, y - 1, z)]) facesByID[block.id][1].push([x, y, z]);
-    if (!chunk.blocks[key(x, y + 1, z)]) facesByID[block.id][0].push([x, y, z]);
-    if (!chunk.blocks[key(x, y, z - 1)]) facesByID[block.id][2].push([x, y, z]);
-    if (!chunk.blocks[key(x, y, z + 1)]) facesByID[block.id][4].push([x, y, z]);
+    if (!chunk.blocks[key(x - 1, y, z)]) facesByID[block.id][5].push(x, y, z);
+    if (!chunk.blocks[key(x + 1, y, z)]) facesByID[block.id][3].push(x, y, z);
+    if (!chunk.blocks[key(x, y - 1, z)]) facesByID[block.id][1].push(x, y, z);
+    if (!chunk.blocks[key(x, y + 1, z)]) facesByID[block.id][0].push(x, y, z);
+    if (!chunk.blocks[key(x, y, z - 1)]) facesByID[block.id][2].push(x, y, z);
+    if (!chunk.blocks[key(x, y, z + 1)]) facesByID[block.id][4].push(x, y, z);
   }
 
   // Construct the faces calculated above
@@ -877,9 +882,9 @@ function generateChunkMesh(chunk) {
   }
 
   // Add constructed data to geometry
-  const positionsArray = new Float32Array(positions.flat());
-  const normalsArray = new Float32Array(normals.flat());
-  const uvsArray = new Float32Array(uvs.flat());
+  const positionsArray = new Float32Array(positions);
+  const normalsArray = new Float32Array(normals);
+  const uvsArray = new Float32Array(uvs);
   geometry.setAttribute("position", new THREE.BufferAttribute(positionsArray, 3));
   geometry.setAttribute("normal", new THREE.BufferAttribute(normalsArray, 3));
   geometry.setAttribute("uv", new THREE.BufferAttribute(uvsArray, 2));
