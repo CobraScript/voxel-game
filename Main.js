@@ -178,11 +178,11 @@ function init() {
   initRandom();
 
   // Event listeners
-  window.addEventListener("resize", onWindowResize, false);
+  window.addEventListener("resize", withErrorHandling(onWindowResize), false);
   renderer.domElement.addEventListener("contextmenu", e => e.preventDefault());
-  document.addEventListener("mousedown", onMouseDown, false);
-  document.addEventListener("keydown", onKeyDown, false);
-  document.addEventListener("keyup", onKeyUp, false);
+  document.addEventListener("mousedown", withErrorHandling(onMouseDown), false);
+  document.addEventListener("keydown", withErrorHandling(onKeyDown), false);
+  document.addEventListener("keyup", withErrorHandling(onKeyUp), false);
 }
 
 /** Populate the `BLOCK_ID` object with the ids of blocks from their names */
@@ -1215,11 +1215,11 @@ function setupSaveButtons() {
   const importBtn = document.getElementById("importBtn");
   const exportBtn = document.getElementById("exportBtn");
 
-  save.onclick = onSave;
-  load.onclick = onLoadSave;
-  clear.onclick = onClearSave;
-  importBtn.onclick = onImportSave;
-  exportBtn.onclick = onExportSave;
+  save.onclick = withErrorHandling(onSave);
+  load.onclick = withErrorHandling(onLoadSave);
+  clear.onclick = withErrorHandling(onClearSave);
+  importBtn.onclick = withErrorHandling(onImportSave);
+  exportBtn.onclick = withErrorHandling(onExportSave);
 }
 
 /** Update the debug text */
@@ -1257,21 +1257,31 @@ function getUserChunkRadius() {
   chunkRadius = numberValue;
 }
 
-try {
+/** Wraps the function with error handling */
+function withErrorHandling(func) {
+  return function (...args) {
+    try {
+      return func.apply(this, args);
+    } catch (error) {
+      console.log("error caught");
+      prompt(
+        `An error was encountered. If you are a player, please report this:
+
+${error.stack}
+
+Copy/paste from here:`,
+        error.stack
+      );
+      console.error(error);
+    }
+  };
+}
+
+withErrorHandling(() => {
   getUserChunkRadius();
   getUserSeed();
   setupUI();
   init();
   updateChunksAroundPlayer(false);
   animate();
-} catch (error) {
-  prompt(
-    `An error was encountered. If you are a player, please report this:
-
-${error.stack}
-
-Copy/paste from here:`,
-    error.stack
-  );
-  console.error(error);
-}
+})();
