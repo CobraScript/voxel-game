@@ -29,6 +29,7 @@ const PLAYER_SPEED = 4;
 const PLAYER_SPRINT_SPEED = 7;
 const PLAYER_CROUCH_SPEED = 2;
 const PLAYER_JUMP_SPEED = 10;
+const SPRINT_DOUBLE_TAP_MAX_DELAY = 500;
 const GRAVITY = 30;
 const PLAYER_SIZE = new THREE.Vector3(0.6, 1.8, 0.6);
 const CAM_OFFSET = new THREE.Vector3(0, 1.6, 0);
@@ -69,6 +70,8 @@ let speed = PLAYER_SPEED;
 let canJump = false;
 let currentBlock = 0; // grass
 let camOffset = CAM_OFFSET.clone();
+let sprintTapLastTime = 0;
+let isDoubleTapSprinting = false;
 
 // Misc
 let lastFrameTime;
@@ -453,10 +456,19 @@ function onWindowResize() {
 
 /** Callback for key press */
 function onKeyDown(event) {
+  if (event.repeat) return;
   switch (event.code) {
     case "ArrowUp":
     case "KeyW":
       moveControls.forward = true;
+
+      // Sprint double tap logic
+      const now = performance.now();
+      if (now - sprintTapLastTime <= SPRINT_DOUBLE_TAP_MAX_DELAY) {
+        moveControls.sprint = true;
+        isDoubleTapSprinting = true;
+      }
+      sprintTapLastTime = now;
       break;
     case "ArrowLeft":
     case "KeyA":
@@ -478,6 +490,7 @@ function onKeyDown(event) {
       break;
     case "KeyR":
       moveControls.sprint = true;
+      isDoubleTapSprinting = false;
       break;
   }
 }
@@ -488,6 +501,9 @@ function onKeyUp(event) {
     case "ArrowUp":
     case "KeyW":
       moveControls.forward = false;
+
+      // Sprint double tap logic
+      if (isDoubleTapSprinting) moveControls.sprint = false;
       break;
     case "ArrowLeft":
     case "KeyA":
