@@ -25,11 +25,15 @@ const TREE_CANOPY_RADIUS = 3;
 const TREE_FOLIAGE_FALLOFF = 0.2;
 const TREE_CHANCE_PER_BLOCK = 0.002;
 
-const PLAYER_SPEED = 6;
+const PLAYER_SPEED = 4;
+const PLAYER_SPRINT_SPEED = 7;
+const PLAYER_CROUCH_SPEED = 2;
 const PLAYER_JUMP_SPEED = 10;
+const SPRINT_DOUBLE_TAP_MAX_DELAY = 500;
 const GRAVITY = 30;
 const PLAYER_SIZE = new THREE.Vector3(0.6, 1.8, 0.6);
-const CAM_OFFSET = new THREE.Vector3(0, 0.7, 0);
+const CAM_OFFSET = new THREE.Vector3(0, 1.6, 0);
+const CAM_OFFSET_CROUCH = new THREE.Vector3(0, 1.2, 0);
 let PLAYER_REACH = 5;
 // /\ I turned it into a "let" variable because we could use if for cool mechanics later.
 
@@ -56,13 +60,18 @@ const moveControls = {
   left: false,
   right: false,
   up: false,
-  down: false,
+  crouch: false,
+  sprint: false,
 };
 let position = new THREE.Vector3(0, TERRAIN_HEIGHT + 1, 0);
 let rotation = new THREE.Euler();
 let velocity = new THREE.Vector3();
+let speed = PLAYER_SPEED;
 let canJump = false;
 let currentBlock = 0; // grass
+let camOffset = CAM_OFFSET.clone();
+let sprintTapLastTime = 0;
+let isDoubleTapSprinting = false;
 
 // Misc
 let lastFrameTime;
@@ -268,6 +277,14 @@ function animate(time) {
 
 /** Calculate the player's movement from input */
 function calculatePlayerMovement(deltaTime) {
+  // Update sprinting/crouching
+  if (moveControls.crouch) speed = PLAYER_CROUCH_SPEED;
+  else if (moveControls.sprint) speed = PLAYER_SPRINT_SPEED;
+  else speed = PLAYER_SPEED;
+
+  if (moveControls.crouch) camOffset.lerp(CAM_OFFSET_CROUCH, 0.6); // use lerp for smoothness
+  else camOffset.lerp(CAM_OFFSET, 0.6);
+
   // Update rotation from camera
   rotation = new THREE.Euler().setFromQuaternion(camera.quaternion, "YXZ");
 
@@ -283,8 +300,8 @@ function calculatePlayerMovement(deltaTime) {
     moveDir.applyEuler(rot);
   }
 
-  velocity.x = moveDir.x * PLAYER_SPEED;
-  velocity.z = moveDir.z * PLAYER_SPEED;
+  velocity.x = moveDir.x * speed;
+  velocity.z = moveDir.z * speed;
 
   // Compute y movement: jump and gravity logic
   if (controls.isLocked && moveControls.up && canJump) velocity.y = PLAYER_JUMP_SPEED;
@@ -296,14 +313,14 @@ function calculatePlayerMovement(deltaTime) {
   movePlayer(deltaPos);
 
   // Update camera controls with new position
-  controls.getObject().position.copy(position).add(CAM_OFFSET);
+  controls.getObject().position.copy(position).add(camOffset);
 }
 
 /** Move the player with collision detection by the given vector */
 function movePlayer(deltaPos) {
   // Compute each axis separately to allow sliding on walls
-  movePlayerAxis(new THREE.Vector3(deltaPos.x, 0, 0));
   movePlayerAxis(new THREE.Vector3(0, deltaPos.y, 0));
+  movePlayerAxis(new THREE.Vector3(deltaPos.x, 0, 0));
   movePlayerAxis(new THREE.Vector3(0, 0, deltaPos.z));
 }
 
@@ -311,6 +328,20 @@ function movePlayer(deltaPos) {
 function movePlayerAxis(deltaPos) {
   // Try moving
   position.add(deltaPos);
+
+  // Prevent falling off if crouching
+  const isY = !!deltaPos.y;
+  if (!isY && moveControls.crouch && canJump) {
+    const smallDownStep = new THREE.Vector3(0, -0.1, 0);
+
+    // Try the small downward step
+    position.add(smallDownStep);
+    if (!isPlayerColliding()) {
+      // Would fall off if moving in this direction: reverse it
+      position.sub(deltaPos);
+    }
+    position.sub(smallDownStep);
+  }
 
   // Keep correcting until not colliding
   let blockBB;
@@ -407,7 +438,9 @@ function playerCollidesBlock(x, y, z) {
 
 /** Retrieve the player's bounding box */
 function getPlayerBB() {
-  return new THREE.Box3().setFromCenterAndSize(position, PLAYER_SIZE);
+  return new THREE.Box3()
+    .setFromCenterAndSize(position, PLAYER_SIZE)
+    .translate(new THREE.Vector3(0, PLAYER_SIZE.y / 2, 0));
 }
 
 /*************** EVENT LISTENERS ***************/
@@ -422,10 +455,19 @@ function onWindowResize() {
 
 /** Callback for key press */
 function onKeyDown(event) {
+  if (event.repeat) return;
   switch (event.code) {
     case "ArrowUp":
     case "KeyW":
       moveControls.forward = true;
+
+      // Sprint double tap logic
+      const now = performance.now();
+      if (now - sprintTapLastTime <= SPRINT_DOUBLE_TAP_MAX_DELAY) {
+        moveControls.sprint = true;
+        isDoubleTapSprinting = true;
+      }
+      sprintTapLastTime = now;
       break;
     case "ArrowLeft":
     case "KeyA":
@@ -443,7 +485,11 @@ function onKeyDown(event) {
       moveControls.up = true;
       break;
     case "ShiftLeft":
-      moveControls.down = true;
+      moveControls.crouch = true;
+      break;
+    case "KeyR":
+      moveControls.sprint = true;
+      isDoubleTapSprinting = false;
       break;
   }
 }
@@ -454,6 +500,9 @@ function onKeyUp(event) {
     case "ArrowUp":
     case "KeyW":
       moveControls.forward = false;
+
+      // Sprint double tap logic
+      if (isDoubleTapSprinting) moveControls.sprint = false;
       break;
     case "ArrowLeft":
     case "KeyA":
@@ -471,7 +520,10 @@ function onKeyUp(event) {
       moveControls.up = false;
       break;
     case "ShiftLeft":
-      moveControls.down = false;
+      moveControls.crouch = false;
+      break;
+    case "KeyR":
+      moveControls.sprint = false;
       break;
   }
 }
@@ -1206,6 +1258,8 @@ function setupStartButton() {
   document.addEventListener("pointerlockchange", () => {
     if (controls.isLocked) {
       start.style.display = "block";
+      // Release all keys
+      for (const k of Object.keys(moveControls)) moveControls[k] = false;
     } else {
       start.style.display = "none";
     }
