@@ -641,7 +641,7 @@ function onPointerLockChange() {
     pauseMenu.style.display = "none";
   } else {
     // Pause game
-    pauseMenu.style.display = "block";
+    pauseMenu.style.display = "flex";
 
     // Release all keys
     for (const k of Object.keys(moveControls)) moveControls[k] = false;
@@ -662,7 +662,7 @@ function onOpenSettings() {
 function onQuitWorld() {
   destroyWorld();
   pauseMenu.style.display = "none";
-  mainMenu.style.display = "block";
+  mainMenu.style.display = "flex";
 }
 
 /*************** WORLD & WORLD GEN ***************/
