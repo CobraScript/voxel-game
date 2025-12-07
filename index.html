@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Voxel Game</title>
     <link
       rel="icon"
@@ -45,6 +46,32 @@
       <button id="pause-export">Export World</button>
       <button id="pause-settings">Settings</button>
       <button id="pause-quit">Quit</button>
+    </div>
+
+    <div class="menu" id="settings-menu">
+      <label for="settings-chunk-dist">Chunk Distance</label>
+      <span id="settings-chunk-dist-value"></span>
+      <input type="range" min="1" max="20" id="settings-chunk-dist" />
+      <br />
+      <a
+        href="https://docs.google.com/document/d/1GYod-WmRxJl89l7dxRTpEu1B-tp2sW3FFMaRxkv2sfM/edit?tab=t.0"
+        target="_blank"
+      >
+        <button id="settings-credits">Credits and Game Log</button>
+      </a>
+      <a
+        href="https://docs.google.com/forms/d/e/1FAIpQLSfCWVajFY9luS-1usq6NH4JPFzu97Hp-3Xy2z0xHjdgKWDekg/viewform"
+        target="_blank"
+      >
+        <button id="settings-bug">Bug reporter</button>
+      </a>
+      <a
+        href="https://docs.google.com/forms/d/e/1FAIpQLScayLIDw7cRBk3w_aKL7so7jvtvpIFT_31QfvEEbzc7oAD6yA/viewform"
+        target="_blank"
+      >
+        <button id="settings-idea">Idea Submission</button>
+      </a>
+      <button id="settings-back">Back</button>
     </div>
 
     <script src="https://unpkg.com/three@0.128.0/build/three.js"></script>

@@ -49,7 +49,7 @@ let raycaster;
 const chunks = {};
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false });
 const textureLoader = new THREE.TextureLoader();
-let chunkRadius = 5;
+let chunkDistance = 5;
 let seed;
 let terrainHeightNoise;
 
@@ -76,6 +76,7 @@ let isDoubleTapSprinting = false;
 // UI
 const mainMenu = document.getElementById("main-menu");
 const pauseMenu = document.getElementById("pause-menu");
+const settingsMenu = document.getElementById("settings-menu");
 const gameElem = document.getElementById("game");
 
 // Misc
@@ -655,7 +656,12 @@ function onResume() {
 
 /** Callback for clicking settings button */
 function onOpenSettings() {
-  alert("no settings yet :)");
+  settingsMenu.style.display = "flex";
+}
+
+/** Callback for closing settings */
+function onCloseSettings() {
+  settingsMenu.style.display = "none";
 }
 
 /** Callback for clicking quit button */
@@ -663,6 +669,13 @@ function onQuitWorld() {
   destroyWorld();
   pauseMenu.style.display = "none";
   mainMenu.style.display = "flex";
+}
+
+/** Callback for changing chunk distance input */
+function onChunkDistChange() {
+  const chunkDistValue = document.getElementById("settings-chunk-dist-value");
+  chunkDistValue.textContent = this.value;
+  chunkDistance = parseInt(this.value);
 }
 
 /*************** WORLD & WORLD GEN ***************/
@@ -958,7 +971,7 @@ function unloadChunk(chunk) {
 
 /** Reload a chunk, adding its mesh back into the scene */
 function reloadChunk(chunk) {
-  if (chunk.loaded) return;
+  if (chunk.loaded || !chunk.mesh) return;
   chunk.loaded = true;
 
   scene.add(chunk.mesh);
@@ -976,8 +989,8 @@ function updateChunksAroundPlayer(generateOne) {
   const pcz = Math.floor(pz / CHUNK_SIZE);
 
   // Generate nearby chunks with radius in a square formation
-  for (let dx = -chunkRadius; dx <= chunkRadius; dx++) {
-    for (let dz = -chunkRadius; dz <= chunkRadius; dz++) {
+  for (let dx = -chunkDistance; dx <= chunkDistance; dx++) {
+    for (let dz = -chunkDistance; dz <= chunkDistance; dz++) {
       const generatedChunk = generateChunk(pcx + dx, pcz + dz);
       if (generateOne && generatedChunk) {
         generated = true;
@@ -1008,7 +1021,7 @@ function updateChunksAroundPlayer(generateOne) {
   for (const [ck, chunk] of Object.entries(chunks)) {
     const [cx, cz] = chunkKeyToArray(ck);
     // Check if distance is too far
-    if (Math.abs(cx - pcx) > chunkRadius || Math.abs(cz - pcz) > chunkRadius) {
+    if (Math.abs(cx - pcx) > chunkDistance || Math.abs(cz - pcz) > chunkDistance) {
       unloadChunk(chunk);
     }
   }
@@ -1209,9 +1222,6 @@ function loadSaveCode1(save) {
       modified: chunk.modified,
     };
   }
-
-  // Generate chunks if needed
-  updateChunksAroundPlayer(false);
 }
 
 /** Load a version 0 save code */
@@ -1315,6 +1325,7 @@ function decodeChunkSaveCode(code) {
 function setupUI() {
   setupMainMenu();
   setupPauseMenu();
+  setupSettings();
 }
 
 /** Setup the main menu */
@@ -1350,6 +1361,21 @@ function setupPauseMenu() {
   quitButton.onclick = withErrorHandling(onQuitWorld);
 }
 
+/** Setup the settings menu */
+function setupSettings() {
+  settingsMenu.style.display = "none";
+
+  const chunkDistValue = document.getElementById("settings-chunk-dist-value");
+  const chunkDist = document.getElementById("settings-chunk-dist");
+  const back = document.getElementById("settings-back");
+
+  chunkDistValue.textContent = chunkDistance;
+  chunkDist.value = chunkDistance;
+
+  chunkDist.oninput = withErrorHandling(onChunkDistChange);
+  back.onclick = withErrorHandling(onCloseSettings);
+}
+
 /** Update the debug text */
 function updateDebug() {
   const debug = document.getElementById("debug");
@@ -1372,17 +1398,6 @@ function updateDebug() {
 function getUserSeed() {
   seed = prompt("Enter a seed or leave blank for a random one");
   if (!seed) seed = Math.floor(Math.random() * 1000000000000000).toString();
-}
-
-/** Get the chunk distance from the user */
-function getUserChunkRadius() {
-  let userInput = prompt("Enter chunk radius (integer) or leave blank for default");
-  if (!userInput) return;
-
-  let numberValue = parseInt(userInput);
-  if (!numberValue) return;
-
-  chunkRadius = numberValue;
 }
 
 /** Wraps the function with error handling */

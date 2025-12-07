@@ -33,6 +33,18 @@ body {
   background-color: #999;
 }
 
+.menu label {
+  font-size: 20pt;
+}
+
+.menu input[type="range"] {
+  width: 200px;
+}
+
+.menu a {
+  text-decoration: none;
+}
+
 #pause-menu {
   background-color: #0008;
 }
