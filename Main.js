@@ -533,6 +533,10 @@ function onKeyDown(event) {
       selectedBlock = 4;
       updateHotbar();
       break;
+    case "Digit6":
+      selectedBlock = 5;
+      updateHotbar();
+      break;
   }
 }
 
@@ -597,7 +601,7 @@ function onMouseDown(event) {
     if (event.button === 0) {
       // Left click
       removeBlock(pos[0], pos[1], pos[2], false);
-    } else if (event.button === 2) {
+    } else if (event.button === 2 && selectedBlock < BLOCK_TYPES.length) {
       // Right click: place position is translated by the normal of the face
       const face = first.face;
       const normal = face.normal;
@@ -620,7 +624,7 @@ function onMouseDown(event) {
 function onScroll(event) {
   if (event.deltaY > 0) selectedBlock++;
   else selectedBlock--;
-  selectedBlock = mod(selectedBlock, BLOCK_TYPES.length);
+  selectedBlock = mod(selectedBlock, 6);
   updateHotbar();
 }
 
@@ -1394,22 +1398,19 @@ function setupUI() {
 
 /** Setup the hotbar */
 function setupHotbar() {
-  BLOCK_TYPES.forEach((blockType, i) => {
-    // Create elements
-    const slot = document.createElement("div");
-    const img = document.createElement("img");
+  // Preset all images to blank
+  Array.from(hotbar.children).forEach(img => {
+    img.src = blank_png;
+  });
 
+  // Set block images
+  BLOCK_TYPES.forEach((blockType, i) => {
     // Get image source
     let texPath = blockType.texPaths[2];
     if (typeof texPath === "number") texPath = blockType.texPaths[texPath];
-    img.src = texPath;
 
-    // Select first
-    if (i === 0) slot.classList.add("selected");
-
-    // Add elements
-    slot.appendChild(img);
-    hotbar.appendChild(slot);
+    // Set the corresponding image
+    hotbar.children[i].src = texPath;
   });
 }
 
@@ -1485,11 +1486,8 @@ function setupImportMenu() {
 
 /** Update the hotbar to reflect the selected block */
 function updateHotbar() {
-  // Deselect all slots
-  for (const slot of hotbar.children) slot.classList.remove("selected");
-
-  // Select the corresponding slot
-  hotbar.children[selectedBlock].classList.add("selected");
+  const selectImgs = [hotbar0_png, hotbar1_png, hotbar2_png, hotbar3_png, hotbar4_png, hotbar5_png];
+  hotbar.style.backgroundImage = `url("${selectImgs[selectedBlock]}")`;
 }
 
 /** Update the debug text */
