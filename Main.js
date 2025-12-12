@@ -49,7 +49,7 @@ let raycaster;
 const chunks = {};
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false });
 const textureLoader = new THREE.TextureLoader();
-let chunkRadius = 5;
+let chunkDistance = 5;
 let seed;
 let terrainHeightNoise;
 
@@ -63,17 +63,29 @@ const moveControls = {
   crouch: false,
   sprint: false,
 };
-let position = new THREE.Vector3(0, TERRAIN_HEIGHT + 1, 0);
+let position;
 let rotation = new THREE.Euler();
 let velocity = new THREE.Vector3();
 let speed = PLAYER_SPEED;
 let canJump = false;
-let currentBlock = 0; // grass
+let selectedBlock = 0; // grass
 let camOffset = CAM_OFFSET.clone();
 let sprintTapLastTime = 0;
 let isDoubleTapSprinting = false;
 
+// UI
+const hotbar = document.getElementById("hotbar");
+const mainMenu = document.getElementById("main-menu");
+const pauseMenu = document.getElementById("pause-menu");
+const settingsMenu = document.getElementById("settings-menu");
+const createMenu = document.getElementById("create-menu");
+const createSeedInput = document.getElementById("create-seed");
+const importMenu = document.getElementById("import-menu");
+const importSaveInput = document.getElementById("import-code");
+const gameElem = document.getElementById("game");
+
 // Misc
+let playing = false;
 let lastFrameTime;
 let fps;
 
@@ -162,7 +174,7 @@ function init() {
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
+  gameElem.appendChild(renderer.domElement);
 
   // Lights
   const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
@@ -180,17 +192,23 @@ function init() {
   controls = new THREE.PointerLockControls(camera, document.body);
   scene.add(controls.getObject());
 
+  // UI
+  setupUI();
+
   // Generate stuff
   generateBlockIDs();
   generateBlockMaterials();
-  initRandom();
 
   // Event listeners
   window.addEventListener("resize", withErrorHandling(onWindowResize), false);
   renderer.domElement.addEventListener("contextmenu", e => e.preventDefault());
   document.addEventListener("mousedown", withErrorHandling(onMouseDown), false);
+  document.addEventListener("wheel", withErrorHandling(onScroll));
   document.addEventListener("keydown", withErrorHandling(onKeyDown), false);
   document.addEventListener("keyup", withErrorHandling(onKeyUp), false);
+
+  // Frame loop
+  animate();
 }
 
 /** Populate the `BLOCK_ID` object with the ids of blocks from their names */
@@ -252,6 +270,9 @@ function generateNoiseFunction(noiseSeed) {
 
 /** Function called every frame for processing and rendering */
 function animate(time) {
+  requestAnimationFrame(withErrorHandling(animate));
+  if (!playing) return;
+
   // Calculate delta time
   let deltaTime;
   if (lastFrameTime === undefined) {
@@ -270,7 +291,6 @@ function animate(time) {
 
   // Render
   renderer.render(scene, camera);
-  requestAnimationFrame(animate);
 }
 
 /*************** PLAYER MOVEMENT ***************/
@@ -491,6 +511,32 @@ function onKeyDown(event) {
       moveControls.sprint = true;
       isDoubleTapSprinting = false;
       break;
+
+    // Hotbar
+    case "Digit1":
+      selectedBlock = 0;
+      updateHotbar();
+      break;
+    case "Digit2":
+      selectedBlock = 1;
+      updateHotbar();
+      break;
+    case "Digit3":
+      selectedBlock = 2;
+      updateHotbar();
+      break;
+    case "Digit4":
+      selectedBlock = 3;
+      updateHotbar();
+      break;
+    case "Digit5":
+      selectedBlock = 4;
+      updateHotbar();
+      break;
+    case "Digit6":
+      selectedBlock = 5;
+      updateHotbar();
+      break;
   }
 }
 
@@ -555,7 +601,7 @@ function onMouseDown(event) {
     if (event.button === 0) {
       // Left click
       removeBlock(pos[0], pos[1], pos[2], false);
-    } else if (event.button === 2) {
+    } else if (event.button === 2 && selectedBlock < BLOCK_TYPES.length) {
       // Right click: place position is translated by the normal of the face
       const face = first.face;
       const normal = face.normal;
@@ -565,7 +611,7 @@ function onMouseDown(event) {
 
       // Prevent placing inside player
       if (!playerCollidesBlock(placeX, placeY, placeZ)) {
-        placeBlock(currentBlock, placeX, placeY, placeZ, false);
+        placeBlock(selectedBlock, placeX, placeY, placeZ, false);
       }
     }
   }
@@ -574,11 +620,39 @@ function onMouseDown(event) {
   for (const hitbox of blockHitboxes) hitbox.geometry.dispose();
 }
 
+/** Callback for mouse scroll */
+function onScroll(event) {
+  if (event.deltaY > 0) selectedBlock++;
+  else selectedBlock--;
+  selectedBlock = mod(selectedBlock, 6);
+  updateHotbar();
+}
+
+/** Callback for clicking create button on main menu */
+function onMainCreate() {
+  createMenu.style.display = "flex";
+  createSeedInput.value = "";
+}
+
+/** Callback for clicking import button on main menu */
+function onMainImport() {
+  importMenu.style.display = "flex";
+  importSaveInput.value = "";
+}
+
+/** Callback for clicking create button */
+function onCreate() {
+  createMenu.style.display = "none";
+  mainMenu.style.display = "none";
+  seed = createSeedInput.value;
+  if (!seed) seed = Math.floor(Math.random() * 1000000000000000).toString();
+  createWorld();
+}
+
 /** Callback for clicking save button */
 function onSave() {
   const save = generateSaveCode();
   localStorage.setItem("save", save);
-  alert("Saved!");
 }
 
 /** Callback for clicking load button */
@@ -588,7 +662,9 @@ function onLoadSave() {
     alert("You do not have a save");
     return;
   }
-  loadSaveCode(save);
+
+  mainMenu.style.display = "none";
+  loadWorld(save);
 }
 
 /** Callback for clicking clear button */
@@ -598,8 +674,12 @@ function onClearSave() {
 
 /** Callback for clicking import button */
 function onImportSave() {
-  const save = prompt("Enter your save here:");
-  if (save) loadSaveCode(save);
+  const save = importSaveInput.value;
+  if (save) {
+    importMenu.style.display = "none";
+    mainMenu.style.display = "none";
+    loadWorld(save);
+  }
 }
 
 /** Callback for clicking export button */
@@ -608,6 +688,59 @@ function onExportSave() {
   navigator.clipboard.writeText(save).then(() => {
     alert("Save copied to clipboard!");
   });
+}
+
+/** Callback for pointer lock change */
+function onPointerLockChange() {
+  if (controls.isLocked) {
+    // Unpause game
+    pauseMenu.style.display = "none";
+  } else {
+    // Pause game
+    pauseMenu.style.display = "flex";
+
+    // Release all keys
+    for (const k of Object.keys(moveControls)) moveControls[k] = false;
+  }
+}
+
+/** Callback for clicking resume button */
+function onResume() {
+  controls.lock();
+}
+
+/** Callback for clicking settings button */
+function onOpenSettings() {
+  settingsMenu.style.display = "flex";
+}
+
+/** Callback for closing settings */
+function onCloseSettings() {
+  settingsMenu.style.display = "none";
+}
+
+/** Callback for closing world creation menu */
+function onCloseCreate() {
+  createMenu.style.display = "none";
+}
+
+/** Callback for closing save import menu */
+function onCloseImport() {
+  importMenu.style.display = "none";
+}
+
+/** Callback for clicking quit button */
+function onQuitWorld() {
+  destroyWorld();
+  pauseMenu.style.display = "none";
+  mainMenu.style.display = "flex";
+}
+
+/** Callback for changing chunk distance input */
+function onChunkDistChange() {
+  const chunkDistValue = document.getElementById("settings-chunk-dist-value");
+  chunkDistValue.textContent = this.value;
+  chunkDistance = parseInt(this.value);
 }
 
 /*************** WORLD & WORLD GEN ***************/
@@ -668,6 +801,41 @@ function findTopBlockY(x, z) {
     if (isBlockAtLocal(lx, y, lz, chunk)) return y;
   }
   return null;
+}
+
+/** Create a new world */
+function createWorld() {
+  initWorld();
+  position = new THREE.Vector3(0, TERRAIN_HEIGHT + 1, 0);
+  controls.getObject().rotation.set(0, 0, 0);
+  updateChunksAroundPlayer(false);
+  controls.lock();
+}
+
+/** Load a world */
+function loadWorld(saveCode) {
+  loadSaveCode(saveCode);
+  initWorld();
+  updateChunksAroundPlayer(false);
+  controls.lock();
+}
+
+/** Initialize the world */
+function initWorld() {
+  initRandom();
+  playing = true;
+}
+
+/** Destroy the world */
+function destroyWorld() {
+  for (const ck of Object.keys(chunks)) {
+    if (chunks[ck].mesh) {
+      scene.remove(chunks[ck].mesh);
+      chunks[ck].mesh.geometry.dispose();
+    }
+    delete chunks[ck];
+  }
+  playing = false;
 }
 
 /** Create a hitbox for a block */
@@ -868,7 +1036,7 @@ function unloadChunk(chunk) {
 
 /** Reload a chunk, adding its mesh back into the scene */
 function reloadChunk(chunk) {
-  if (chunk.loaded) return;
+  if (chunk.loaded || !chunk.mesh) return;
   chunk.loaded = true;
 
   scene.add(chunk.mesh);
@@ -886,8 +1054,8 @@ function updateChunksAroundPlayer(generateOne) {
   const pcz = Math.floor(pz / CHUNK_SIZE);
 
   // Generate nearby chunks with radius in a square formation
-  for (let dx = -chunkRadius; dx <= chunkRadius; dx++) {
-    for (let dz = -chunkRadius; dz <= chunkRadius; dz++) {
+  for (let dx = -chunkDistance; dx <= chunkDistance; dx++) {
+    for (let dz = -chunkDistance; dz <= chunkDistance; dz++) {
       const generatedChunk = generateChunk(pcx + dx, pcz + dz);
       if (generateOne && generatedChunk) {
         generated = true;
@@ -918,7 +1086,7 @@ function updateChunksAroundPlayer(generateOne) {
   for (const [ck, chunk] of Object.entries(chunks)) {
     const [cx, cz] = chunkKeyToArray(ck);
     // Check if distance is too far
-    if (Math.abs(cx - pcx) > chunkRadius || Math.abs(cz - pcz) > chunkRadius) {
+    if (Math.abs(cx - pcx) > chunkDistance || Math.abs(cz - pcz) > chunkDistance) {
       unloadChunk(chunk);
     }
   }
@@ -1119,9 +1287,6 @@ function loadSaveCode1(save) {
       modified: chunk.modified,
     };
   }
-
-  // Generate chunks if needed
-  updateChunksAroundPlayer(false);
 }
 
 /** Load a version 0 save code */
@@ -1223,62 +1388,106 @@ function decodeChunkSaveCode(code) {
 
 /** Setup all UI */
 function setupUI() {
-  setupPalette();
-  setupStartButton();
-  setupSaveButtons();
+  setupHotbar();
+  setupMainMenu();
+  setupPauseMenu();
+  setupSettings();
+  setupCreateMenu();
+  setupImportMenu();
 }
 
-/** Setup the block palette */
-function setupPalette() {
-  const palette = document.getElementById("blockPalette");
-
-  BLOCK_TYPES.forEach((type, index) => {
-    const btn = document.createElement("button");
-    btn.textContent = type.name;
-    btn.onclick = () => {
-      currentBlock = index;
-      document.getElementById("currentBlock").textContent = type.name;
-    };
-    palette.appendChild(btn);
+/** Setup the hotbar */
+function setupHotbar() {
+  // Preset all images to blank
+  Array.from(hotbar.children).forEach(img => {
+    img.src = blank_png;
   });
 
-  document.getElementById("currentBlock").textContent = BLOCK_TYPES[currentBlock].name;
-}
+  // Set block images
+  BLOCK_TYPES.forEach((blockType, i) => {
+    // Get image source
+    let texPath = blockType.texPaths[2];
+    if (typeof texPath === "number") texPath = blockType.texPaths[texPath];
 
-/** Setup the pointer lock start button */
-function setupStartButton() {
-  const start = document.getElementById("startButton");
-
-  // Lock on click
-  start.addEventListener("click", () => {
-    controls.lock();
-  });
-
-  // Appear/disappear when pointer lock changes
-  document.addEventListener("pointerlockchange", () => {
-    if (controls.isLocked) {
-      start.style.display = "block";
-      // Release all keys
-      for (const k of Object.keys(moveControls)) moveControls[k] = false;
-    } else {
-      start.style.display = "none";
-    }
+    // Set the corresponding image
+    hotbar.children[i].src = texPath;
   });
 }
 
-/** Setup all of the save related buttons */
-function setupSaveButtons() {
-  const save = document.getElementById("saveBtn");
-  const load = document.getElementById("loadBtn");
-  const clear = document.getElementById("clearBtn");
-  const importBtn = document.getElementById("importBtn");
-  const exportBtn = document.getElementById("exportBtn");
+/** Setup the main menu */
+function setupMainMenu() {
+  const createButton = document.getElementById("main-create");
+  const loadButton = document.getElementById("main-load");
+  const importButton = document.getElementById("main-import");
+  const settingsButton = document.getElementById("main-settings");
 
-  save.onclick = withErrorHandling(onSave);
-  load.onclick = withErrorHandling(onLoadSave);
-  clear.onclick = withErrorHandling(onClearSave);
-  importBtn.onclick = withErrorHandling(onImportSave);
-  exportBtn.onclick = withErrorHandling(onExportSave);
+  createButton.onclick = withErrorHandling(onMainCreate);
+  loadButton.onclick = withErrorHandling(onLoadSave);
+  importButton.onclick = withErrorHandling(onMainImport);
+  settingsButton.onclick = withErrorHandling(onOpenSettings);
+}
+
+/** Setup the pause menu */
+function setupPauseMenu() {
+  pauseMenu.style.display = "none";
+
+  // Pause on exit pointer lock
+  document.addEventListener("pointerlockchange", withErrorHandling(onPointerLockChange));
+
+  const resumeButton = document.getElementById("pause-resume");
+  const saveButton = document.getElementById("pause-save");
+  const exportButton = document.getElementById("pause-export");
+  const settingsButton = document.getElementById("pause-settings");
+  const quitButton = document.getElementById("pause-quit");
+
+  resumeButton.onclick = withErrorHandling(onResume);
+  saveButton.onclick = withErrorHandling(onSave);
+  exportButton.onclick = withErrorHandling(onExportSave);
+  settingsButton.onclick = withErrorHandling(onOpenSettings);
+  quitButton.onclick = withErrorHandling(onQuitWorld);
+}
+
+/** Setup the settings menu */
+function setupSettings() {
+  settingsMenu.style.display = "none";
+
+  const chunkDistValue = document.getElementById("settings-chunk-dist-value");
+  const chunkDist = document.getElementById("settings-chunk-dist");
+  const back = document.getElementById("settings-back");
+
+  chunkDistValue.textContent = chunkDistance;
+  chunkDist.value = chunkDistance;
+
+  chunkDist.oninput = withErrorHandling(onChunkDistChange);
+  back.onclick = withErrorHandling(onCloseSettings);
+}
+
+/** Setup the world creation menu */
+function setupCreateMenu() {
+  createMenu.style.display = "none";
+
+  const create = document.getElementById("create-create");
+  const back = document.getElementById("create-back");
+
+  create.onclick = withErrorHandling(onCreate);
+  back.onclick = withErrorHandling(onCloseCreate);
+}
+
+/** Setup the import menu */
+function setupImportMenu() {
+  importMenu.style.display = "none";
+
+  const importButton = document.getElementById("import-import");
+  const back = document.getElementById("import-back");
+
+  importButton.onclick = withErrorHandling(onImportSave);
+  back.onclick = withErrorHandling(onCloseImport);
+}
+
+/** Update the hotbar to reflect the selected block */
+function updateHotbar() {
+  const selectImgs = [hotbar0_png, hotbar1_png, hotbar2_png, hotbar3_png, hotbar4_png, hotbar5_png];
+  hotbar.style.backgroundImage = `url("${selectImgs[selectedBlock]}")`;
 }
 
 /** Update the debug text */
@@ -1299,30 +1508,12 @@ function updateDebug() {
 
 /*************** MISC ***************/
 
-/** Get a seed from the user */
-function getUserSeed() {
-  seed = prompt("Enter a seed or leave blank for a random one");
-  if (!seed) seed = Math.floor(Math.random() * 1000000000000000).toString();
-}
-
-/** Get the chunk distance from the user */
-function getUserChunkRadius() {
-  let userInput = prompt("Enter chunk radius (integer) or leave blank for default");
-  if (!userInput) return;
-
-  let numberValue = parseInt(userInput);
-  if (!numberValue) return;
-
-  chunkRadius = numberValue;
-}
-
 /** Wraps the function with error handling */
 function withErrorHandling(func) {
   return function (...args) {
     try {
       return func.apply(this, args);
     } catch (error) {
-      console.log("error caught");
       prompt(
         `An error was encountered. If you are a player, please report this:
 
@@ -1337,10 +1528,5 @@ Copy/paste from here:`,
 }
 
 withErrorHandling(() => {
-  getUserChunkRadius();
-  getUserSeed();
-  setupUI();
   init();
-  updateChunksAroundPlayer(false);
-  animate();
 })();

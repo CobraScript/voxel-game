@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Voxel Game</title>
     <link
       rel="icon"
@@ -22,51 +23,71 @@
       }
     </script>
 
-    <div id="hud">
-      <div><strong>Block:</strong> <span id="currentBlock">grass</span></div>
-      <div id="blockPalette"></div>
-      <div style="margin-top: 6px">
-        <button id="saveBtn">Save World</button>
-        <button id="loadBtn">Load World</button>
-        <button id="clearBtn">Clear Save</button>
-        <button id="importBtn">Import Save</button>
-        <button id="exportBtn">Export Save</button>
-        <br />
-        <a
-          href="https://docs.google.com/document/d/1GYod-WmRxJl89l7dxRTpEu1B-tp2sW3FFMaRxkv2sfM/edit?tab=t.0"
-          target="_blank"
-          ><button id="MiscBtn">Credits and Game log</button></a
-        >
-        <a
-          href="https://docs.google.com/forms/d/e/1FAIpQLSfCWVajFY9luS-1usq6NH4JPFzu97Hp-3Xy2z0xHjdgKWDekg/viewform"
-          target="_blank"
-          ><button id="BugBtn">Bug reporter</button></a
-        >
-        <a
-          href="https://docs.google.com/forms/d/e/1FAIpQLScayLIDw7cRBk3w_aKL7so7jvtvpIFT_31QfvEEbzc7oAD6yA/viewform"
-          target="_blank"
-          ><button id="IdeaBtn">Idea Submission</button></a
-        >
-        <span id="saveStatus"></span>
-      </div>
-      <div style="margin-top: 6px; font-size: 13px">
-        Controls: Click to lock pointer · WASD move · Space jump · Shift crouch · Left-click remove
-        · Right-click place
-      </div>
-      <div id="fps"></div>
+    <div id="game">
       <div id="debug"></div>
+      <div id="hotbar"><img /><img /><img /><img /><img /><img /></div>
+      <div id="crosshair">
+        <div></div>
+        <div></div>
+      </div>
     </div>
 
-    <div class="overlay">
-      <div id="crosshair">
-        <div>
-          <div></div>
-          <div></div>
-        </div>
-      </div>
+    <div class="menu" id="main-menu">
+      <h1>Voxel Game</h1>
+      <button id="main-create">Create World</button>
+      <button id="main-load">Load World</button>
+      <button id="main-import">Import World</button>
+      <button id="main-settings">Settings</button>
     </div>
-    <div class="overlay">
-      <div id="startButton">pointer lock</div>
+
+    <div class="menu" id="pause-menu">
+      <button id="pause-resume">Resume</button>
+      <button id="pause-save">Save</button>
+      <button id="pause-export">Export World</button>
+      <button id="pause-settings">Settings</button>
+      <button id="pause-quit">Quit</button>
+    </div>
+
+    <div class="menu" id="settings-menu">
+      <label for="settings-chunk-dist">Chunk Distance</label>
+      <span id="settings-chunk-dist-value"></span>
+      <input type="range" min="1" max="20" id="settings-chunk-dist" />
+      <br /><br /><br />
+      <a
+        href="https://docs.google.com/document/d/1GYod-WmRxJl89l7dxRTpEu1B-tp2sW3FFMaRxkv2sfM/edit?tab=t.0"
+        target="_blank"
+      >
+        <button id="settings-credits">Credits and Game Log</button>
+      </a>
+      <a
+        href="https://docs.google.com/forms/d/e/1FAIpQLSfCWVajFY9luS-1usq6NH4JPFzu97Hp-3Xy2z0xHjdgKWDekg/viewform"
+        target="_blank"
+      >
+        <button id="settings-bug">Bug reporter</button>
+      </a>
+      <a
+        href="https://docs.google.com/forms/d/e/1FAIpQLScayLIDw7cRBk3w_aKL7so7jvtvpIFT_31QfvEEbzc7oAD6yA/viewform"
+        target="_blank"
+      >
+        <button id="settings-idea">Idea Submission</button>
+      </a>
+      <button id="settings-back">Back</button>
+    </div>
+
+    <div class="menu" id="create-menu">
+      <label for="create-seed">Seed</label>
+      <input type="text" id="create-seed" />
+      <br /><br /><br />
+      <button id="create-create">Create</button>
+      <button id="create-back">Back</button>
+    </div>
+
+    <div class="menu" id="import-menu">
+      <label for="import-code">Enter Save Code</label>
+      <input type="text" id="import-code" />
+      <br /><br /><br />
+      <button id="import-import">Import</button>
+      <button id="import-back">Back</button>
     </div>
 
     <script src="https://unpkg.com/three@0.128.0/build/three.js"></script>
