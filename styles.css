@@ -1,3 +1,7 @@
+:root {
+  --button-img: url("");
+}
+
 html,
 body {
   height: 100%;
@@ -27,7 +31,7 @@ body {
   margin: 10px 0px;
   border: none;
   padding: 0px;
-  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADoAAAAICAIAAAAna3vZAAAAA3NCSVQICAjb4U/gAAAAOUlEQVQ4jWN8s7+RYegAFgYGhjf3zg60M4gCN178YRpoN5AGRp1LSzDqXFoCFgYGhhsv/gy0M4gFAH/hCk9WRJh0AAAAAElFTkSuQmCC");
+  background-image: var(--button-img);
   background-size: contain;
   font-size: 20pt;
 }
@@ -78,7 +82,6 @@ body {
   width: 100%;
   height: 78px;
   bottom: 20px;
-  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAD4AAAANCAYAAADxL91HAAAAtElEQVR4AeyRMQrCMBiFHz2Aq+BcD+E1LF5BLyBdxbU3cBLcewaXIji4C4KzQ48gaL+WFLr87RqSwkdD/i+Ql5fU1+MvRBLxpRtpIvX7Id+pbnd1wZvw+S7TGI2monyN4oPXB+ey6WImCxywHGY4wNoCByyHGQ6wtsABy2GGMwjORijE4KE07XLGxt1LhPKPjYfStMvZN16cSm0PZxMO5dlS69XcxAevDV5d9prK8/OV71DMHwAA//95R4pnAAAABklEQVQDAOJOh2pptcTdAAAAAElFTkSuQmCC");
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;

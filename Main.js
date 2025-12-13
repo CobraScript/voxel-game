@@ -1388,12 +1388,18 @@ function decodeChunkSaveCode(code) {
 
 /** Setup all UI */
 function setupUI() {
+  setupVars();
   setupHotbar();
   setupMainMenu();
   setupPauseMenu();
   setupSettings();
   setupCreateMenu();
   setupImportMenu();
+}
+
+/** Setup CSS variables */
+function setupVars() {
+  document.documentElement.style.setProperty("--button-img", `var("${button_png}")`);
 }
 
 /** Setup the hotbar */
@@ -1412,6 +1418,9 @@ function setupHotbar() {
     // Set the corresponding image
     hotbar.children[i].src = texPath;
   });
+
+  // Update
+  updateHotbar();
 }
 
 /** Setup the main menu */
