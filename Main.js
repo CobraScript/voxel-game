@@ -1399,7 +1399,7 @@ function setupUI() {
 
 /** Setup CSS variables */
 function setupVars() {
-  document.documentElement.style.setProperty("--button-img", `var("${button_png}")`);
+  document.documentElement.style.setProperty("--button-img", `url("${button_png}")`);
 }
 
 /** Setup the hotbar */
