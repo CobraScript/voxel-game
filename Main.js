@@ -13,11 +13,12 @@ const BLOCK_TYPES = [
 const BLOCK_ID = {}; // { name: id }
 
 const CUBE_SIZE = 1;
-
+const CAVE_SCALE = 0.03;      // Controls cave size
+const CAVE_THRESHOLD = 0.6;   // Controls how many caves appear
 const MIN_HEIGHT = 0;
-const MAX_HEIGHT = 128;
+const MAX_HEIGHT = 300;
 const CHUNK_SIZE = 16;
-const TERRAIN_HEIGHT = 64; // this will affect spawn height as well
+const TERRAIN_HEIGHT = 128; // this will affect spawn height as well
 const TERRAIN_INTENSITIES = [24, 8, 4, 2, 1];
 const TERRAIN_RESOLUTIONS = [0.003, 0.01, 0.02, 0.05, 0.1];
 const TREE_CANOPY_RADIUS = 3;
@@ -266,6 +267,8 @@ function generateNoiseFunction(noiseSeed) {
         return noise(x * resolution, y * resolution) * intensity;
       })
       .reduce((total, n) => total + n, 0);
+    
+  caveSimplex = createNoise3D(new Alea(rng()));
 }
 
 /** Function called every frame for processing and rendering */
@@ -968,10 +971,23 @@ function generateTree(x, y, z, cx, cz, rng) {
   }
 }
 
+
+// --- CAVE SETTINGS ---
+let caveSimplex;
+
+function isCave(x, y, z) {
+  // "Bedrock" protection using existing MIN_HEIGHT
+  if (y <= MIN_HEIGHT + 2) return false;
+  
+  // 3D Noise check
+  return caveSimplex(x * CAVE_SCALE, y * CAVE_SCALE, z * CAVE_SCALE) > CAVE_THRESHOLD;
+}
+
 /**
  * Generate a chunk given its xz coordinates,
  * returns true if generated and false if already there or reloaded
  */
+
 function generateChunk(cx, cz) {
   const ck = chunkKey(cx, cz);
 
@@ -1000,6 +1016,9 @@ function generateChunk(cx, cz) {
 
       // Place blocks
       for (let y = 0; y < height; y++) {
+        // FIX 1: Check for cave FIRST. If it is a cave, skip placing the block.
+        if (isCave(wx, y, wz)) continue;
+        
         const top = y === height - 1;
         const type = top ? BLOCK_ID.grass : y >= height - 3 ? BLOCK_ID.dirt : BLOCK_ID.stone;
         placeBlockLocal(type, x, y, z, chunk);
@@ -1010,7 +1029,7 @@ function generateChunk(cx, cz) {
   // Generate trees
   for (let x = -TREE_CANOPY_RADIUS; x < CHUNK_SIZE + TREE_CANOPY_RADIUS; x++) {
     for (let z = -TREE_CANOPY_RADIUS; z < CHUNK_SIZE + TREE_CANOPY_RADIUS; z++) {
-      // Get location rng
+      // Get location rng lol
       const wx = startX + x;
       const wz = startZ + z;
       const lrng = locationRng(wx, wz);
@@ -1018,7 +1037,11 @@ function generateChunk(cx, cz) {
       // Place tree
       if (lrng() < TREE_CHANCE_PER_BLOCK) {
         const height = getTerrainHeight(wx, wz);
-        generateTree(wx, height, wz, cx, cz, lrng);
+        
+        // FIX 2: Only generate tree if the ground block exists (is not a cave)
+        if (!isCave(wx, height - 1, wz)) {
+          generateTree(wx, height, wz, cx, cz, lrng);
+        }
       }
     }
   }
