@@ -13,10 +13,11 @@ const BLOCK_TYPES = [
 const BLOCK_ID = {}; // { name: id }
 
 const CUBE_SIZE = 1;
-const CAVE_SCALE = 0.03; // Controls cave size
-const CAVE_MIN_THRESHOLD = 0.6; // Controls how many caves appear
+const CAVE_MIN_THRESHOLD = 0.5; // Controls how many caves appear
 const CAVE_MIN_HEIGHT = 0;
 const CAVE_MAX_HEIGHT = 100;
+const CAVE_INTENSITIES = [15, 5, 1];
+const CAVE_RESOLUTIONS = [0.01, 0.05, 0.2];
 const MIN_HEIGHT = 0;
 const MAX_HEIGHT = 160;
 const CHUNK_SIZE = 16;
@@ -45,6 +46,7 @@ const EPSILON = 1e-6;
 // Precompute constants for cave gen
 const CAVE_MID_HEIGHT = (CAVE_MIN_HEIGHT + CAVE_MAX_HEIGHT) / 2;
 const CAVE_THRESHOLD_SCALE = (1 - CAVE_MIN_THRESHOLD) / ((CAVE_MAX_HEIGHT - CAVE_MIN_HEIGHT) / 2);
+const CAVE_INTENSITIES_SUM = CAVE_INTENSITIES.reduce((total, n) => total + n, 0);
 
 // 3d rendering stuff
 let scene, camera, renderer, controls;
@@ -229,7 +231,7 @@ function generateBlockIDs() {
 /** Initialize all random functions from the global seed */
 function initRandom() {
   const rng = new Alea(seed);
-  generateNoiseFunction(rng());
+  generateNoiseFunctions(rng());
 }
 
 /** Generate materials for each block type */
@@ -259,15 +261,16 @@ function generateBlockMaterials() {
   }
 }
 
-/** Generate the noise function */
-function generateNoiseFunction(noiseSeed) {
+/** Generate the noise functions */
+function generateNoiseFunctions(noiseSeed) {
   // Generate individual functions
   const rng = new Alea(noiseSeed);
-  const noiseFuncs = TERRAIN_INTENSITIES.map(_ => createNoise2D(new Alea(rng())));
+  const terrainNoiseFuncs = TERRAIN_INTENSITIES.map(_ => createNoise2D(new Alea(rng())));
+  const caveNoiseFuncs = CAVE_INTENSITIES.map(_ => createNoise3D(new Alea(rng())));
 
   // Set the combined function
   terrainHeightNoise = (x, y) =>
-    noiseFuncs
+    terrainNoiseFuncs
       .map((noise, i) => {
         const intensity = TERRAIN_INTENSITIES[i];
         const resolution = TERRAIN_RESOLUTIONS[i];
@@ -275,7 +278,14 @@ function generateNoiseFunction(noiseSeed) {
       })
       .reduce((total, n) => total + n, 0);
 
-  caveNoise = createNoise3D(new Alea(rng()));
+  caveNoise = (x, y, z) => 
+    caveNoiseFuncs
+      .map((noise, i) => {
+        const intensity = CAVE_INTENSITIES[i];
+        const resolution = CAVE_RESOLUTIONS[i];
+        return noise(x * resolution, y * resolution, z * resolution) * intensity;
+      })
+      .reduce((total, n) => total + n, 0);
 }
 
 /** Function called every frame for processing and rendering */
@@ -953,7 +963,7 @@ function isCave(x, y, z) {
   const threshold = CAVE_THRESHOLD_SCALE * Math.abs(y - CAVE_MID_HEIGHT) + CAVE_MIN_THRESHOLD;
 
   // 3D Noise check
-  return caveNoise(x * CAVE_SCALE, y * CAVE_SCALE, z * CAVE_SCALE) > threshold;
+  return caveNoise(x, y, z) > threshold * CAVE_INTENSITIES_SUM;
 }
 
 /** Generate a tree with root at the specified location */
@@ -1043,7 +1053,7 @@ function generateChunk(cx, cz) {
         const height = getTerrainHeight(wx, wz);
 
         // Only generate tree if the ground block exists (is not a cave)
-        if (!isCave(wx, height, wz)) {
+        if (!isCave(wx, height - 1, wz)) {
           generateTree(wx, height, wz, cx, cz, lrng);
         }
       }
