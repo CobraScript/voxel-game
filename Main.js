@@ -200,12 +200,13 @@ function init() {
   generateBlockMaterials();
 
   // Event listeners
-  window.addEventListener("resize", withErrorHandling(onWindowResize), false);
+  window.addEventListener("resize", withErrorHandling(onWindowResize));
+  window.addEventListener("beforeunload", withErrorHandling(onBeforeUnload))
   renderer.domElement.addEventListener("contextmenu", e => e.preventDefault());
-  document.addEventListener("mousedown", withErrorHandling(onMouseDown), false);
+  document.addEventListener("mousedown", withErrorHandling(onMouseDown));
   document.addEventListener("wheel", withErrorHandling(onScroll));
-  document.addEventListener("keydown", withErrorHandling(onKeyDown), false);
-  document.addEventListener("keyup", withErrorHandling(onKeyUp), false);
+  document.addEventListener("keydown", withErrorHandling(onKeyDown));
+  document.addEventListener("keyup", withErrorHandling(onKeyUp));
 
   // Frame loop
   animate();
@@ -471,6 +472,14 @@ function onWindowResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+/** Callback for before the page unloads, to show the "changes you made may not be saved" dialog */
+function onBeforeUnload(event) {
+  if (playing) {
+    event.preventDefault();
+    event.returnValue = "";
+  }
 }
 
 /** Callback for key press */
