@@ -14,11 +14,13 @@ const BLOCK_ID = {}; // { name: id }
 
 const CUBE_SIZE = 1;
 const CAVE_SCALE = 0.03; // Controls cave size
-const CAVE_THRESHOLD = 0.6; // Controls how many caves appear
+const CAVE_MIN_THRESHOLD = 0.6; // Controls how many caves appear
+const CAVE_MIN_HEIGHT = 0;
+const CAVE_MAX_HEIGHT = 100;
 const MIN_HEIGHT = 0;
-const MAX_HEIGHT = 300;
+const MAX_HEIGHT = 160;
 const CHUNK_SIZE = 16;
-const TERRAIN_HEIGHT = 128; // this will affect spawn height as well
+const TERRAIN_HEIGHT = 80; // this will affect spawn height as well
 const TERRAIN_INTENSITIES = [24, 8, 4, 2, 1];
 const TERRAIN_RESOLUTIONS = [0.003, 0.01, 0.02, 0.05, 0.1];
 const TREE_CANOPY_RADIUS = 3;
@@ -39,6 +41,10 @@ let PLAYER_REACH = 5;
 // /\ I turned it into a "let" variable because we could use if for cool mechanics later.
 
 const EPSILON = 1e-6;
+
+// Precompute constants for cave gen
+const CAVE_MID_HEIGHT = (CAVE_MIN_HEIGHT + CAVE_MAX_HEIGHT) / 2;
+const CAVE_THRESHOLD_SCALE = (1 - CAVE_MIN_THRESHOLD) / ((CAVE_MAX_HEIGHT - CAVE_MIN_HEIGHT) / 2);
 
 // 3d rendering stuff
 let scene, camera, renderer, controls;
@@ -942,11 +948,12 @@ function getTerrainHeight(x, z) {
 
 /** Check if a block should be air as part of a cave */
 function isCave(x, y, z) {
-  // "Bedrock" protection using existing MIN_HEIGHT
-  if (y <= MIN_HEIGHT + 2) return false;
+  // Compute threshold to interpolate between CAVE_MIN_THRESHOLD in the middle
+  // and 1 at CAVE_MIN_HEIGHT and CAVE_MAX_HEIGHT
+  const threshold = CAVE_THRESHOLD_SCALE * Math.abs(y - CAVE_MID_HEIGHT) + CAVE_MIN_THRESHOLD;
 
   // 3D Noise check
-  return caveNoise(x * CAVE_SCALE, y * CAVE_SCALE, z * CAVE_SCALE) > CAVE_THRESHOLD;
+  return caveNoise(x * CAVE_SCALE, y * CAVE_SCALE, z * CAVE_SCALE) > threshold;
 }
 
 /** Generate a tree with root at the specified location */
