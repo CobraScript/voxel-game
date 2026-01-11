@@ -40,7 +40,7 @@
       <button id="main-settings">Settings</button>
     </div>
 
-    <div class="menu" id="pause-menu" style="display: none">
+    <div class="menu" id="pause-menu">
       <button id="pause-resume">Resume</button>
       <button id="pause-save">Save</button>
       <button id="pause-export">Export World</button>
@@ -48,7 +48,7 @@
       <button id="pause-quit">Quit</button>
     </div>
 
-    <div class="menu" id="settings-menu" style="display: none">
+    <div class="menu" id="settings-menu">
       <label for="settings-chunk-dist">Chunk Distance</label>
       <span id="settings-chunk-dist-value"></span>
       <input type="range" min="1" max="20" id="settings-chunk-dist" />
@@ -74,34 +74,15 @@
       <button id="settings-back">Back</button>
     </div>
 
-    <div class="menu" id="create-menu" style="display: none">
-      <label for="create-name">World Name</label>
-      <input type="text" id="create-name" placeholder="New World" />
-      <br /><br />
+    <div class="menu" id="create-menu">
       <label for="create-seed">Seed</label>
-      <input type="text" id="create-seed" placeholder="Leave empty for random" />
+      <input type="text" id="create-seed" />
       <br /><br /><br />
       <button id="create-create">Create</button>
       <button id="create-back">Back</button>
     </div>
 
-    <div class="menu" id="load-menu" style="display: none">
-      <h1>Select World</h1>
-      <div
-        id="load-list"
-        style="
-          max-height: 300px;
-          overflow-y: auto;
-          width: 100%;
-          margin-bottom: 20px;
-          border: 1px solid #ccc;
-          background: rgba(0, 0, 0, 0.5);
-        "
-      ></div>
-      <button id="load-back">Back</button>
-    </div>
-
-    <div class="menu" id="import-menu" style="display: none">
+    <div class="menu" id="import-menu">
       <label for="import-code">Enter Save Code</label>
       <input type="text" id="import-code" />
       <br /><br /><br />

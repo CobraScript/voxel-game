@@ -63,10 +63,6 @@ let seed;
 let terrainHeightNoise;
 let caveNoise;
 
-// Save system variables
-let currentWorldName = "Untitled";
-const SAVE_PREFIX = "voxel_save_";
-
 // Player
 const moveControls = {
   forward: false,
@@ -88,7 +84,6 @@ let sprintTapLastTime = 0;
 let isDoubleTapSprinting = false;
 
 // UI
-let isUIVisible = true;
 const hotbar = document.getElementById("hotbar");
 const mainMenu = document.getElementById("main-menu");
 const pauseMenu = document.getElementById("pause-menu");
@@ -283,7 +278,7 @@ function generateNoiseFunctions(noiseSeed) {
       })
       .reduce((total, n) => total + n, 0);
 
-  caveNoise = (x, y, z) =>
+  caveNoise = (x, y, z) => 
     caveNoiseFuncs
       .map((noise, i) => {
         const intensity = CAVE_INTENSITIES[i];
@@ -537,13 +532,6 @@ function onKeyDown(event) {
       isDoubleTapSprinting = false;
       break;
 
-    // Toggle UI
-    case "F1":
-    case "Backquote":
-      event.preventDefault();
-      toggleUI();
-      break;
-
     // Hotbar
     case "Digit1":
       selectedBlock = 0;
@@ -660,42 +648,23 @@ function onScroll(event) {
   updateHotbar();
 }
 
-/** Open the main create menu (clears inputs) */
+/** Callback for clicking create button on main menu */
 function onMainCreate() {
   createMenu.style.display = "flex";
   createSeedInput.value = "";
-  // Reset the name input if it exists
-  const nameInput = document.getElementById("create-name");
-  if (nameInput) nameInput.value = "";
 }
 
-/** Open the main import menu */
+/** Callback for clicking import button on main menu */
 function onMainImport() {
   importMenu.style.display = "flex";
   importSaveInput.value = "";
 }
 
-/** Create world */
+/** Callback for clicking create button */
 function onCreate() {
-  const nameInput = document.getElementById("create-name");
-  const nameVal = nameInput ? nameInput.value.trim() : "Untitled";
-
-  if (!nameVal) {
-    alert("Please enter a world name.");
-    return;
-  }
-
-  // Check if overwrite
-  if (localStorage.getItem(SAVE_PREFIX + nameVal)) {
-    if (!confirm("A world with this name already exists. Overwrite?")) return;
-  }
-
-  currentWorldName = nameVal;
-  seed = createSeedInput.value;
-
   createMenu.style.display = "none";
   mainMenu.style.display = "none";
-
+  seed = createSeedInput.value;
   if (!seed) seed = Math.floor(Math.random() * 1000000000000000).toString();
   createWorld();
 }
@@ -703,77 +672,19 @@ function onCreate() {
 /** Callback for clicking save button */
 function onSave() {
   const save = generateSaveCode();
-  localStorage.setItem(SAVE_PREFIX + currentWorldName, save);
-  alert(`Game saved as "${currentWorldName}"!`);
+  localStorage.setItem("save", save);
 }
 
-/** Open the new load menu and populate list */
-function onOpenLoadMenu() {
+/** Callback for clicking load button */
+function onLoadSave() {
+  const save = localStorage.getItem("save");
+  if (!save) {
+    alert("You do not have a save");
+    return;
+  }
+
   mainMenu.style.display = "none";
-  const loadMenu = document.getElementById("load-menu");
-  loadMenu.style.display = "flex";
-
-  const list = document.getElementById("load-list");
-  list.innerHTML = "";
-
-  let foundSaves = false;
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key.startsWith(SAVE_PREFIX)) {
-      foundSaves = true;
-      const worldName = key.replace(SAVE_PREFIX, "");
-
-      const row = document.createElement("div");
-      row.style.cssText =
-        "display: flex; justify-content: space-between; margin: 5px 0; background: rgba(0,0,0,0.3); padding: 5px;";
-
-      const nameLabel = document.createElement("span");
-      nameLabel.textContent = worldName;
-      nameLabel.style.cssText = "color: white; padding: 5px; font-size: 18px;";
-
-      const btnGroup = document.createElement("div");
-
-      // Load Button
-      const loadBtn = document.createElement("button");
-      loadBtn.textContent = "Play";
-      loadBtn.style.fontSize = "14px";
-      loadBtn.onclick = () => {
-        currentWorldName = worldName;
-        const saveCode = localStorage.getItem(key);
-        document.getElementById("load-menu").style.display = "none";
-        loadWorld(saveCode);
-      };
-
-      // Delete Button
-      const delBtn = document.createElement("button");
-      delBtn.textContent = "Delete";
-      delBtn.style.fontSize = "14px";
-      delBtn.style.backgroundColor = "#ff4444";
-      delBtn.style.marginLeft = "5px";
-      delBtn.onclick = () => {
-        if (confirm(`Are you sure you want to delete "${worldName}"?`)) {
-          localStorage.removeItem(key);
-          onOpenLoadMenu(); // Refresh list
-        }
-      };
-
-      btnGroup.appendChild(loadBtn);
-      btnGroup.appendChild(delBtn);
-      row.appendChild(nameLabel);
-      row.appendChild(btnGroup);
-      list.appendChild(row);
-    }
-  }
-
-  if (!foundSaves) {
-    list.innerHTML = "<p style='color: white;'>No saved worlds found.</p>";
-  }
-}
-
-/** Close the load menu */
-function onCloseLoadMenu() {
-  document.getElementById("load-menu").style.display = "none";
-  mainMenu.style.display = "flex";
+  loadWorld(save);
 }
 
 /** Callback for clicking clear button */
@@ -1555,18 +1466,11 @@ function setupMainMenu() {
   const loadButton = document.getElementById("main-load");
   const importButton = document.getElementById("main-import");
   const settingsButton = document.getElementById("main-settings");
-  const loadBackButton = document.getElementById("load-back");
 
   createButton.onclick = withErrorHandling(onMainCreate);
-  loadButton.onclick = withErrorHandling(onOpenLoadMenu);
+  loadButton.onclick = withErrorHandling(onLoadSave);
   importButton.onclick = withErrorHandling(onMainImport);
   settingsButton.onclick = withErrorHandling(onOpenSettings);
-
-  if (loadBackButton) {
-    loadBackButton.onclick = withErrorHandling(onCloseLoadMenu);
-  } else {
-    console.warn("Load back button not found! Did you update index.html?");
-  }
 }
 
 /** Setup the pause menu */
@@ -1646,20 +1550,6 @@ function updateDebug() {
     Rotation (x y):
       ${THREE.Math.radToDeg(rotation.x).toFixed(2)} ${THREE.Math.radToDeg(rotation.y).toFixed(2)}
   `;
-}
-
-// TOGGLE UI VISIBILITY
-function toggleUI() {
-  isUIVisible = !isUIVisible;
-  // If visible, clear the inline style so CSS takes over. If not, set to none.
-  const displayStyle = isUIVisible ? "" : "none";
-
-  const hudElements = ["hotbar", "crosshair", "debug"];
-
-  hudElements.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = displayStyle;
-  });
 }
 
 /*************** MISC ***************/
