@@ -755,7 +755,7 @@ function onOpenLoadMenu() {
   }
 
   if (!foundSaves) {
-    const msg = doucment.createElement("p");
+    const msg = document.createElement("p");
     msg.textContent = "No saved worlds found.";
     loadMenuList.appendChild(msg);
   }
