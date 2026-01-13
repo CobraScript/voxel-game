@@ -255,19 +255,25 @@ function generateNoiseFunctions(noiseSeed) {
   const rng = new Alea(noiseSeed);
 
   // 1. Biome Map Noise
-  const biomeRng = new Alea(noiseSeed + "_biome");
+  const biomeRng = new Alea(rng());
   const biomeSimplex = createNoise2D(biomeRng);
   const bScale = WORLD_SETTINGS.biomeScale;
   biomeNoise = (x, z) => biomeSimplex(x / bScale, z / bScale);
 
   // 2. Per-Biome Noise Arrays
   BIOME_LIST.forEach(biome => {
-    // We map over 'intensities' to create a noise function for each layer
-    // (Assuming intensities and resolutions have the same length)
-    biome.noiseLayers = biome.terrain.intensities.map((_, index) => {
-      const layerRng = new Alea(`${noiseSeed}_${biome.id}_${index}`);
-      return createNoise2D(layerRng);
-    });
+    // We map over intensities to create a noise function for each layer
+    const noiseFuncs = biome.terrain.intensities.map(_ => createNoise2D(new Alea(rng())));
+
+    biome.terrainHeightAt = (x, y) =>
+      biome.terrain.baseHeight +
+      noiseFuncs
+        .map(
+          (noise, i) =>
+            noise(x * biome.terrain.resolutions[i], y * biome.terrain.resolutions[i]) *
+            biome.terrain.intensities[i]
+        )
+        .reduce((total, n) => total + n, 0);
   });
 
   // 3. Cave noise
@@ -1053,22 +1059,13 @@ function getTerrainHeight(x, z) {
   // 3. Loop through all biomes and calculate their influence
   for (const biome of BIOME_LIST) {
     const dist = Math.abs(temp - biome.temperature);
+
+    // Triangle weight blending shape ___/\___
     let weight = Math.max(0, 1 - dist / WORLD_SETTINGS.blendDistance);
 
     if (weight > 0) {
-      // --- ARRAY OCTAVE SUMMATION START ---
-      let biomeHeight = biome.terrain.baseHeight;
-      // Loop through intensities
-      for (let i = 0; i < biome.terrain.intensities.length; i++) {
-        const intensity = biome.terrain.intensities[i];
-        const resolution = biome.terrain.resolutions[i]; // Matching resolution
-        const noiseFunc = biome.noiseLayers[i]; // The specific function for this octave
-
-        // noiseFunc returns -1 to 1
-        const rawNoise = noiseFunc(x * resolution, z * resolution);
-        biomeHeight += rawNoise * intensity;
-      }
-      // --- OCTAVE SUMMATION END ---
+      // Get the biome's terrain height contribution
+      let biomeHeight = biome.terrainHeightAt(x, z);
 
       totalHeight += biomeHeight * weight;
       totalWeight += weight;
@@ -1078,12 +1075,7 @@ function getTerrainHeight(x, z) {
   // 4. Fallback if no weights
   if (totalWeight === 0) {
     const b = BIOME_LIST[0];
-    let h = b.terrain.baseHeight;
-    for (let i = 0; i < b.terrain.intensities.length; i++) {
-      const intensity = b.terrain.intensities[i];
-      const resolution = b.terrain.resolutions[i];
-      h += b.noiseLayers[i](x * resolution, z * resolution) * intensity;
-    }
+    let h = b.terrainHeightAt(x, z);
     return Math.floor(h);
   }
 
