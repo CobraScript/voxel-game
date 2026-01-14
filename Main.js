@@ -63,6 +63,10 @@ let seed;
 let terrainHeightNoise;
 let caveNoise;
 
+// Save system variables
+let currentWorldName = "Untitled";
+const SAVE_PREFIX = "voxel_save_";
+
 // Player
 const moveControls = {
   forward: false,
@@ -84,12 +88,18 @@ let sprintTapLastTime = 0;
 let isDoubleTapSprinting = false;
 
 // UI
+let isUIVisible = true;
+const debugElem = document.getElementById("debug");
 const hotbar = document.getElementById("hotbar");
+const crosshair = document.getElementById("crosshair");
 const mainMenu = document.getElementById("main-menu");
 const pauseMenu = document.getElementById("pause-menu");
 const settingsMenu = document.getElementById("settings-menu");
 const createMenu = document.getElementById("create-menu");
 const createSeedInput = document.getElementById("create-seed");
+const createNameInput = document.getElementById("create-name");
+const loadMenu = document.getElementById("load-menu");
+const loadMenuList = document.getElementById("load-list");
 const importMenu = document.getElementById("import-menu");
 const importSaveInput = document.getElementById("import-code");
 const gameElem = document.getElementById("game");
@@ -279,7 +289,7 @@ function generateNoiseFunctions(noiseSeed) {
       })
       .reduce((total, n) => total + n, 0);
 
-  caveNoise = (x, y, z) => 
+  caveNoise = (x, y, z) =>
     caveNoiseFuncs
       .map((noise, i) => {
         const intensity = CAVE_INTENSITIES[i];
@@ -541,6 +551,13 @@ function onKeyDown(event) {
       isDoubleTapSprinting = false;
       break;
 
+    // Toggle UI
+    case "F1":
+    case "Backquote":
+      event.preventDefault();
+      toggleUI();
+      break;
+
     // Hotbar
     case "Digit1":
       selectedBlock = 0;
@@ -606,7 +623,13 @@ function onKeyUp(event) {
 /** Callback for mouse click */
 function onMouseDown(event) {
   // Only break blocks when playing
-  if (!controls.isLocked) return;
+  if (!playing) return;
+
+  // Allow clicking into pointer lock if pause menu is not shown
+  if (!controls.isLocked) {
+    if (pauseMenu.style.display === "none") controls.lock();
+    return;
+  }
 
   // All breakable block hitboxes
   const blockHitboxes = createBlockRangeHitboxes(
@@ -657,43 +680,160 @@ function onScroll(event) {
   updateHotbar();
 }
 
-/** Callback for clicking create button on main menu */
+/** Open the main create menu (clears inputs) */
 function onMainCreate() {
   createMenu.style.display = "flex";
   createSeedInput.value = "";
+  createNameInput.value = "";
 }
 
-/** Callback for clicking import button on main menu */
+/** Open the main import menu */
 function onMainImport() {
   importMenu.style.display = "flex";
   importSaveInput.value = "";
 }
 
-/** Callback for clicking create button */
+/** Create world */
 function onCreate() {
-  createMenu.style.display = "none";
-  mainMenu.style.display = "none";
+  let nameVal = createNameInput.value.trim();
+
+  if (!nameVal) nameVal = "New World";
+
+  // Check if overwrite
+  const keys = JSON.parse(localStorage.getItem("voxel_saves"));
+  if (keys && keys.includes(SAVE_PREFIX + nameVal)) {
+    alert(`A world with the name ${nameVal} already exists.`);
+    return;
+  }
+
+  currentWorldName = nameVal;
   seed = createSeedInput.value;
   if (!seed) seed = Math.floor(Math.random() * 1000000000000000).toString();
+
+  createMenu.style.display = "none";
+  mainMenu.style.display = "none";
+
   createWorld();
 }
 
 /** Callback for clicking save button */
 function onSave() {
   const save = generateSaveCode();
-  localStorage.setItem("save", save);
+  localStorage.setItem(SAVE_PREFIX + currentWorldName, save);
+
+  const keys = JSON.parse(localStorage.getItem("voxel_saves")) || [];
+  if (!keys.includes(SAVE_PREFIX + currentWorldName)) {
+    keys.unshift(SAVE_PREFIX + currentWorldName);
+    localStorage.setItem("voxel_saves", JSON.stringify(keys));
+  }
 }
 
-/** Callback for clicking load button */
-function onLoadSave() {
-  const save = localStorage.getItem("save");
-  if (!save) {
-    alert("You do not have a save");
+/** Open the new load menu and populate list */
+function onOpenLoadMenu() {
+  mainMenu.style.display = "none";
+  loadMenu.style.display = "flex";
+  loadMenuList.innerHTML = "";
+
+  // Get save key order
+  const keys = JSON.parse(localStorage.getItem("voxel_saves"));
+  if (!keys || !keys.length) {
+    const msg = document.createElement("p");
+    msg.textContent = "No saved worlds found.";
+    loadMenuList.appendChild(msg);
     return;
   }
 
-  mainMenu.style.display = "none";
-  loadWorld(save);
+  // Display each one
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    const worldName = key.replace(SAVE_PREFIX, "");
+
+    const row = document.createElement("div");
+    const nameLabel = document.createElement("span");
+    const btnGroup = document.createElement("div");
+    const btnsLeft = document.createElement("div");
+    const btnsRight = document.createElement("div");
+
+    row.classList.add("load-menu-row");
+    btnGroup.classList.add("load-menu-buttons");
+    nameLabel.textContent = worldName;
+
+    // Load Button
+    const loadBtn = document.createElement("button");
+    loadBtn.textContent = "Play";
+    loadBtn.onclick = withErrorHandling(() => {
+      currentWorldName = worldName;
+      const saveCode = localStorage.getItem(key);
+      loadMenu.style.display = "none";
+      loadWorld(saveCode);
+    });
+
+    // Rename Button
+    const renameBtn = document.createElement("button");
+    renameBtn.textContent = "Rename";
+    renameBtn.onclick = withErrorHandling(() => {
+      const newName = prompt(`Rename ${worldName} to:`);
+      if (!newName) return;
+      if (localStorage.getItem(SAVE_PREFIX + newName)) {
+        alert(`A world with the name ${newName} already exists.`);
+        return;
+      }
+
+      const save = localStorage.getItem(key);
+      localStorage.removeItem(key);
+      localStorage.setItem(SAVE_PREFIX + newName, save);
+      onOpenLoadMenu(); // refresh list
+    });
+
+    // Delete Button
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "Delete";
+    delBtn.onclick = withErrorHandling(() => {
+      if (confirm(`Are you sure you want to delete "${worldName}"?`)) {
+        localStorage.removeItem(key);
+        keys.splice(keys.indexOf(key), 1);
+        localStorage.setItem("voxel_saves", JSON.stringify(keys));
+        onOpenLoadMenu(); // refresh list
+      }
+    });
+
+    // Move Buttons
+    const upBtn = document.createElement("img");
+    upBtn.src = up_button_png;
+    upBtn.onclick = withErrorHandling(() => {
+      if (i !== 0) {
+        [keys[i], keys[i - 1]] = [keys[i - 1], keys[i]];
+        localStorage.setItem("voxel_saves", JSON.stringify(keys));
+        onOpenLoadMenu(); // refresh list
+      }
+    });
+    const downBtn = document.createElement("img");
+    downBtn.src = down_button_png;
+    downBtn.onclick = withErrorHandling(() => {
+      if (i !== keys.length - 1) {
+        [keys[i], keys[i + 1]] = [keys[i + 1], keys[i]];
+        localStorage.setItem("voxel_saves", JSON.stringify(keys));
+        onOpenLoadMenu(); // refresh list
+      }
+    });
+
+    btnsLeft.appendChild(loadBtn);
+    btnsLeft.appendChild(renameBtn);
+    btnsLeft.appendChild(delBtn);
+    btnsRight.appendChild(upBtn);
+    btnsRight.appendChild(downBtn);
+    btnGroup.appendChild(btnsLeft);
+    btnGroup.appendChild(btnsRight);
+    row.appendChild(nameLabel);
+    row.appendChild(btnGroup);
+    loadMenuList.appendChild(row);
+  }
+}
+
+/** Close the load menu */
+function onCloseLoadMenu() {
+  loadMenu.style.display = "none";
+  mainMenu.style.display = "flex";
 }
 
 /** Callback for clicking clear button */
@@ -760,6 +900,9 @@ function onCloseImport() {
 
 /** Callback for clicking quit button */
 function onQuitWorld() {
+  // Save before quitting
+  onSave();
+
   destroyWorld();
   pauseMenu.style.display = "none";
   mainMenu.style.display = "flex";
@@ -1287,6 +1430,7 @@ function generateSaveCode() {
   const save = {
     saveVersion: 1,
     seed,
+    name: currentWorldName,
     player: { position: pos, velocity: vel, rotation: rot, canJump },
     chunks: chunksEncoded,
   };
@@ -1312,6 +1456,21 @@ function loadSaveCode(save) {
 function loadSaveCode1(save) {
   // Decode and update misc data
   seed = save.seed;
+  currentWorldName = save.name;
+  if (!currentWorldName) {
+    const keys = JSON.parse(localStorage.getItem("voxel_saves"));
+    while (true) {
+      if (currentWorldName) {
+        currentWorldName = prompt(
+          `A world with the name ${currentWorldName} already exists. Enter a different name:`
+        );
+      } else {
+        currentWorldName = prompt("Enter a name for this world:");
+      }
+
+      if (currentWorldName && !(keys && keys.includes(SAVE_PREFIX + currentWorldName))) break;
+    }
+  }
   initRandom();
   position = new THREE.Vector3(...save.player.position);
   velocity = new THREE.Vector3(...save.player.velocity);
@@ -1339,6 +1498,21 @@ function loadSaveCode1(save) {
 function loadSaveCode0(save) {
   // Decode and update misc data
   seed = "0";
+  currentWorldName = save.name;
+  if (!currentWorldName) {
+    const keys = JSON.parse(localStorage.getItem("voxel_saves"));
+    while (true) {
+      if (currentWorldName) {
+        currentWorldName = prompt(
+          `A world with the name ${currentWorldName} already exists. Enter a different name:`
+        );
+      } else {
+        currentWorldName = prompt("Enter a name for this world:");
+      }
+
+      if (currentWorldName && !(keys && keys.includes(SAVE_PREFIX + currentWorldName))) break;
+    }
+  }
   initRandom();
   position = new THREE.Vector3(...save.player.position);
   velocity = new THREE.Vector3(...save.player.velocity);
@@ -1440,6 +1614,7 @@ function setupUI() {
   setupPauseMenu();
   setupSettings();
   setupCreateMenu();
+  setupLoadMenu();
   setupImportMenu();
 }
 
@@ -1477,7 +1652,7 @@ function setupMainMenu() {
   const settingsButton = document.getElementById("main-settings");
 
   createButton.onclick = withErrorHandling(onMainCreate);
-  loadButton.onclick = withErrorHandling(onLoadSave);
+  loadButton.onclick = withErrorHandling(onOpenLoadMenu);
   importButton.onclick = withErrorHandling(onMainImport);
   settingsButton.onclick = withErrorHandling(onOpenSettings);
 }
@@ -1528,6 +1703,15 @@ function setupCreateMenu() {
   back.onclick = withErrorHandling(onCloseCreate);
 }
 
+/** Setup the load menu with world selection */
+function setupLoadMenu() {
+  loadMenu.style.display = "none";
+
+  const loadBackButton = document.getElementById("load-back");
+
+  loadBackButton.onclick = withErrorHandling(onCloseLoadMenu);
+}
+
 /** Setup the import menu */
 function setupImportMenu() {
   importMenu.style.display = "none";
@@ -1559,6 +1743,19 @@ function updateDebug() {
     Rotation (x y):
       ${THREE.Math.radToDeg(rotation.x).toFixed(2)} ${THREE.Math.radToDeg(rotation.y).toFixed(2)}
   `;
+}
+
+/** Toggle UI visibility */
+function toggleUI() {
+  isUIVisible = !isUIVisible;
+  // If visible, clear the inline style so CSS takes over. If not, set to none.
+  const displayStyle = isUIVisible ? "" : "none";
+
+  const hudElements = [debugElem, hotbar, crosshair];
+
+  hudElements.forEach(el => {
+    el.style.display = displayStyle;
+  });
 }
 
 /*************** MISC ***************/

@@ -45,7 +45,7 @@
       <button id="pause-save">Save</button>
       <button id="pause-export">Export World</button>
       <button id="pause-settings">Settings</button>
-      <button id="pause-quit">Quit</button>
+      <button id="pause-quit">Save & Quit</button>
     </div>
 
     <div class="menu" id="settings-menu">
@@ -75,11 +75,20 @@
     </div>
 
     <div class="menu" id="create-menu">
+      <label for="create-name">World Name</label>
+      <input type="text" id="create-name" placeholder="New World" />
+      <br /><br />
       <label for="create-seed">Seed</label>
-      <input type="text" id="create-seed" />
+      <input type="text" id="create-seed" placeholder="Leave empty for random" />
       <br /><br /><br />
       <button id="create-create">Create</button>
       <button id="create-back">Back</button>
+    </div>
+
+    <div class="menu" id="load-menu">
+      <h1>Select World</h1>
+      <div id="load-list"></div>
+      <button id="load-back">Back</button>
     </div>
 
     <div class="menu" id="import-menu">
