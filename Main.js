@@ -1118,6 +1118,20 @@ function isCave(x, y, z) {
   return caveNoise(x, y, z) > threshold * CAVE_INTENSITIES_SUM;
 }
 
+/** Generator for relative chunk coordinates for chunk generation order */
+function* chunkGenOrder() {
+  yield [0, 0];
+
+  for (let i = 1; i <= chunkDistance; i++) {
+    for (let j = 0; j < 2 * i; j++) {
+      yield [-i + j, -i];
+      yield [i, -i + j];
+      yield [i - j, i];
+      yield [-i, i - j];
+    }
+  }
+}
+
 /** Generate a tree with root at the specified location */
 function generateTree(x, y, z, cx, cz, rng) {
   // Randomly generate trunk height
@@ -1243,20 +1257,19 @@ function updateChunksAroundPlayer(generateOne) {
   const pcz = Math.floor(pz / CHUNK_SIZE);
 
   // Generate nearby chunks with radius in a square formation
-  for (let dx = -chunkDistance; dx <= chunkDistance; dx++) {
-    for (let dz = -chunkDistance; dz <= chunkDistance; dz++) {
-      const generatedChunk = generateChunk(pcx + dx, pcz + dz);
-      if (generateOne && generatedChunk) {
-        generated = true;
-        break;
-      }
+  for (const [dx, dz] of chunkGenOrder()) {
+    const generatedChunk = generateChunk(pcx + dx, pcz + dz);
+    if (generateOne && generatedChunk) {
+      generated = true;
+      break;
     }
-    if (generated) break;
   }
 
   // Update meshes
   if (!generated) {
-    for (const [ck, chunk] of Object.entries(chunks)) {
+    for (const [dx, dz] of chunkGenOrder()) {
+      const ck = chunkKey(pcx + dx, pcz + dz);
+      const chunk = chunks[ck];
       if (chunk.updateMesh) {
         scene.remove(chunk.mesh);
         generateChunkMesh(ck);
