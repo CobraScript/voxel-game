@@ -773,15 +773,20 @@ function onOpenLoadMenu() {
     renameBtn.textContent = "Rename";
     renameBtn.onclick = withErrorHandling(() => {
       const newName = prompt(`Rename ${worldName} to:`);
+      const newKey = SAVE_PREFIX + newName;
       if (!newName) return;
-      if (localStorage.getItem(SAVE_PREFIX + newName)) {
+      if (keys.includes(newKey)) {
         alert(`A world with the name ${newName} already exists.`);
         return;
       }
 
-      const save = localStorage.getItem(key);
+      const saveStr = localStorage.getItem(key);
       localStorage.removeItem(key);
-      localStorage.setItem(SAVE_PREFIX + newName, save);
+      const save = JSON.parse(saveStr);
+      save.name = newName;
+      localStorage.setItem(newKey, JSON.stringify(save));
+      keys[keys.indexOf(key)] = newKey;
+      localStorage.setItem("voxel_saves", JSON.stringify(keys));
       onOpenLoadMenu(); // refresh list
     });
 
