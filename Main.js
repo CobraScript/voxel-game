@@ -899,8 +899,8 @@ function onResume() {
 
 /** Callback for toggling inventory visibility */
 function onToggleInventory() {
-  // Prevent opening inventory on pause screen
-  if (isPaused) return;
+  // Prevent opening inventory on pause screen or when not playing
+  if (isPaused || !playing) return;
 
   isInventoryOpen = !isInventoryOpen;
   if (isInventoryOpen) {
@@ -1697,6 +1697,29 @@ function setupMainMenu() {
 /** Setup the inventory menu */
 function setupInventoryMenu() {
   inventoryMenu.style.display = "none";
+
+  const inventoryElem = document.getElementById("inventory");
+
+  for (let i = 6; i < 30; i++) {
+    const slot = document.createElement("div");
+    slot.classList.add("inventory-slot");
+    slot.dataset.slotid = i;
+    const img = document.createElement("img");
+    img.src = test_png;
+    slot.appendChild(img);
+    inventoryElem.appendChild(slot);
+  }
+
+  for (let i = 0; i < 6; i++) {
+    const slot = document.createElement("div");
+    slot.classList.add("inventory-slot");
+    slot.classList.add("inventory-slot-hotbar");
+    slot.dataset.slotid = i;
+    const img = document.createElement("img");
+    img.src = test_png;
+    slot.appendChild(img);
+    inventoryElem.appendChild(slot);
+  }
 }
 
 /** Setup the pause menu */

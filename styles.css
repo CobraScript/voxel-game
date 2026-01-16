@@ -59,11 +59,27 @@ body {
 }
 
 #inventory {
-  width: 384px;
-  height: 384px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  width: 354px;
+  height: 348px;
+  padding: 18px 12px 18px 18px;
   background-image: var(--inventory-img);
   background-repeat: no-repeat;
   background-size: contain;
+}
+
+.inventory-slot-hotbar {
+  margin-top: 54px;
+}
+
+.inventory-slot img {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  top: 3px;
+  left: 3px;
 }
 
 #pause-menu,
