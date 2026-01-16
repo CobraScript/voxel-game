@@ -89,11 +89,14 @@ let isDoubleTapSprinting = false;
 
 // UI
 let isUIVisible = true;
+let isPaused = false;
+let isInventoryOpen = false;
 const debugElem = document.getElementById("debug");
 const hotbar = document.getElementById("hotbar");
 const crosshair = document.getElementById("crosshair");
 const mainMenu = document.getElementById("main-menu");
 const pauseMenu = document.getElementById("pause-menu");
+const inventoryMenu = document.getElementById("inventory-menu");
 const settingsMenu = document.getElementById("settings-menu");
 const createMenu = document.getElementById("create-menu");
 const createSeedInput = document.getElementById("create-seed");
@@ -221,7 +224,7 @@ function init() {
 
   // Event listeners
   window.addEventListener("resize", withErrorHandling(onWindowResize));
-  window.addEventListener("beforeunload", withErrorHandling(onBeforeUnload))
+  window.addEventListener("beforeunload", withErrorHandling(onBeforeUnload));
   renderer.domElement.addEventListener("contextmenu", e => e.preventDefault());
   document.addEventListener("mousedown", withErrorHandling(onMouseDown));
   document.addEventListener("wheel", withErrorHandling(onScroll));
@@ -342,7 +345,7 @@ function calculatePlayerMovement(deltaTime) {
   // Compute xz movement
   let moveDir = new THREE.Vector3();
 
-  if (controls.isLocked) {
+  if (controls.isLocked && !isInventoryOpen) {
     moveDir.x = moveControls.right - moveControls.left;
     moveDir.z = moveControls.back - moveControls.forward;
     moveDir.normalize();
@@ -583,6 +586,11 @@ function onKeyDown(event) {
       selectedBlock = 5;
       updateHotbar();
       break;
+
+    // Inventory
+    case "KeyE":
+      onToggleInventory();
+      break;
   }
 }
 
@@ -625,9 +633,9 @@ function onMouseDown(event) {
   // Only break blocks when playing
   if (!playing) return;
 
-  // Allow clicking into pointer lock if pause menu is not shown
+  // Allow clicking into pointer lock if pause menu or inventory is not shown
   if (!controls.isLocked) {
-    if (pauseMenu.style.display === "none") controls.lock();
+    if (!isPaused && !isInventoryOpen) controls.lock();
     return;
   }
 
@@ -868,10 +876,16 @@ function onExportSave() {
 function onPointerLockChange() {
   if (controls.isLocked) {
     // Unpause game
-    pauseMenu.style.display = "none";
+    if (isPaused) {
+      pauseMenu.style.display = "none";
+      isPaused = false;
+    }
   } else {
     // Pause game
-    pauseMenu.style.display = "flex";
+    if (!isInventoryOpen) {
+      pauseMenu.style.display = "flex";
+      isPaused = true;
+    }
 
     // Release all keys
     for (const k of Object.keys(moveControls)) moveControls[k] = false;
@@ -881,6 +895,21 @@ function onPointerLockChange() {
 /** Callback for clicking resume button */
 function onResume() {
   controls.lock();
+}
+
+/** Callback for toggling inventory visibility */
+function onToggleInventory() {
+  // Prevent opening inventory on pause screen
+  if (isPaused) return;
+
+  isInventoryOpen = !isInventoryOpen;
+  if (isInventoryOpen) {
+    inventoryMenu.style.display = "flex";
+    controls.unlock();
+  } else {
+    inventoryMenu.style.display = "none";
+    controls.lock();
+  }
 }
 
 /** Callback for clicking settings button */
@@ -910,6 +939,7 @@ function onQuitWorld() {
 
   destroyWorld();
   pauseMenu.style.display = "none";
+  isPaused = false;
   mainMenu.style.display = "flex";
 }
 
@@ -1616,6 +1646,7 @@ function setupUI() {
   setupVars();
   setupHotbar();
   setupMainMenu();
+  setupInventoryMenu();
   setupPauseMenu();
   setupSettings();
   setupCreateMenu();
@@ -1626,6 +1657,7 @@ function setupUI() {
 /** Setup CSS variables */
 function setupVars() {
   document.documentElement.style.setProperty("--button-img", `url("${button_png}")`);
+  document.documentElement.style.setProperty("--inventory-img", `url("${inventory_png}")`);
 }
 
 /** Setup the hotbar */
@@ -1660,6 +1692,11 @@ function setupMainMenu() {
   loadButton.onclick = withErrorHandling(onOpenLoadMenu);
   importButton.onclick = withErrorHandling(onMainImport);
   settingsButton.onclick = withErrorHandling(onOpenSettings);
+}
+
+/** Setup the inventory menu */
+function setupInventoryMenu() {
+  inventoryMenu.style.display = "none";
 }
 
 /** Setup the pause menu */

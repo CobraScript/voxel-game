@@ -1,5 +1,6 @@
 :root {
   --button-img: url("");
+  --inventory-img: url("");
 }
 
 html,
@@ -57,7 +58,16 @@ body {
   text-decoration: none;
 }
 
-#pause-menu {
+#inventory {
+  width: 384px;
+  height: 384px;
+  background-image: var(--inventory-img);
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+#pause-menu,
+#inventory-menu {
   background-color: #0008;
 }
 
