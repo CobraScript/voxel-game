@@ -95,7 +95,7 @@ let camOffset = CAM_OFFSET.clone();
 let sprintTapLastTime = 0;
 let isDoubleTapSprinting = false;
 
-const inventory = new Array(30); // [{ id }]
+let inventory = new Array(30); // [{ id }]
 let mouseItem;
 
 // UI
@@ -1095,7 +1095,6 @@ function createWorld() {
 function loadWorld(saveCode) {
   loadSaveCode(saveCode);
   initWorld();
-  setDefaultInventory();
   updateInventory();
   updateChunksAroundPlayer(false);
   controls.lock();
@@ -1121,6 +1120,10 @@ function destroyWorld() {
 
 /** Set a default inventory */
 function setDefaultInventory() {
+  // Clear
+  inventory = new Array(30);
+
+  // Add one of each item
   for (let i = 0; i < ITEM_TYPES.length; i++) {
     inventory[i] = { id: i };
   }
@@ -1534,7 +1537,6 @@ function generateSaveCode() {
     if (chunk.modified) {
       chunksEncoded[ck] = {
         blocks: generateChunkSaveCode(chunk),
-        modified: true,
       };
     }
   }
@@ -1543,11 +1545,15 @@ function generateSaveCode() {
   const pos = [position.x, position.y, position.z];
   const vel = [velocity.x, velocity.y, velocity.z];
   const rot = [rotation.x, rotation.y, rotation.z];
+  const inv = {
+    slots: inventory,
+    mouseItem,
+  };
   const save = {
     saveVersion: 1,
     seed,
     name: currentWorldName,
-    player: { position: pos, velocity: vel, rotation: rot, canJump },
+    player: { position: pos, velocity: vel, rotation: rot, canJump, inventory: inv },
     chunks: chunksEncoded,
   };
 
@@ -1588,15 +1594,17 @@ function loadSaveCode1(save) {
     }
   }
   initRandom();
+
   position = new THREE.Vector3(...save.player.position);
   velocity = new THREE.Vector3(...save.player.velocity);
   camera.quaternion.setFromEuler(new THREE.Euler(...save.player.rotation, "YXZ"));
   canJump = save.player.canJump;
 
-  // Delete all old chunks
-  for (const ck of Object.keys(chunks)) {
-    scene.remove(chunks[ck].mesh);
-    delete chunks[ck];
+  if (save.player.inventory) {
+    inventory = save.player.inventory.slots;
+    mouseItem = save.player.inventory.mouseItem;
+  } else {
+    setDefaultInventory();
   }
 
   // Decode and add new chunks
@@ -1605,7 +1613,7 @@ function loadSaveCode1(save) {
       blocks: decodeChunkSaveCode(chunk.blocks),
       loaded: false,
       updateMesh: true,
-      modified: chunk.modified,
+      modified: true,
     };
   }
 }
@@ -1630,15 +1638,15 @@ function loadSaveCode0(save) {
     }
   }
   initRandom();
+
   position = new THREE.Vector3(...save.player.position);
   velocity = new THREE.Vector3(...save.player.velocity);
   camera.quaternion.setFromEuler(new THREE.Euler(...save.player.rotation, "YXZ"));
   canJump = save.player.canJump;
 
-  // Delete all old chunks
-  for (const ck of Object.keys(chunks)) {
-    scene.remove(chunks[ck].mesh);
-    delete chunks[ck];
+  if (save.player.inventory) {
+    inventory = save.player.inventory.slots;
+    mouseItem = save.player.inventory.mouseItem;
   }
 
   // Decode and add new chunks
