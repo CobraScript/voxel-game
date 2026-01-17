@@ -90,7 +90,7 @@ let rotation = new THREE.Euler();
 let velocity = new THREE.Vector3();
 let speed = PLAYER_SPEED;
 let canJump = false;
-let selectedBlock = 0; // grass
+let hotbarIndex = 0;
 let camOffset = CAM_OFFSET.clone();
 let sprintTapLastTime = 0;
 let isDoubleTapSprinting = false;
@@ -589,27 +589,27 @@ function onKeyDown(event) {
 
     // Hotbar
     case "Digit1":
-      selectedBlock = 0;
+      hotbarIndex = 0;
       updateHotbar();
       break;
     case "Digit2":
-      selectedBlock = 1;
+      hotbarIndex = 1;
       updateHotbar();
       break;
     case "Digit3":
-      selectedBlock = 2;
+      hotbarIndex = 2;
       updateHotbar();
       break;
     case "Digit4":
-      selectedBlock = 3;
+      hotbarIndex = 3;
       updateHotbar();
       break;
     case "Digit5":
-      selectedBlock = 4;
+      hotbarIndex = 4;
       updateHotbar();
       break;
     case "Digit6":
-      selectedBlock = 5;
+      hotbarIndex = 5;
       updateHotbar();
       break;
 
@@ -687,17 +687,23 @@ function onMouseDown(event) {
     if (event.button === 0) {
       // Left click
       removeBlock(pos[0], pos[1], pos[2], false);
-    } else if (event.button === 2 && selectedBlock < BLOCK_TYPES.length) {
-      // Right click: place position is translated by the normal of the face
-      const face = first.face;
-      const normal = face.normal;
-      const placeX = pos[0] + normal.x;
-      const placeY = pos[1] + normal.y;
-      const placeZ = pos[2] + normal.z;
+    } else if (event.button === 2) {
+      // Get selected hotbar block
+      const item = inventory[hotbarIndex];
+      if (item) {
+        const block = ITEM_TYPES[item.id].blockID;
 
-      // Prevent placing inside player
-      if (!playerCollidesBlock(placeX, placeY, placeZ)) {
-        placeBlock(selectedBlock, placeX, placeY, placeZ, false);
+        // Right click: place position is translated by the normal of the face
+        const face = first.face;
+        const normal = face.normal;
+        const placeX = pos[0] + normal.x;
+        const placeY = pos[1] + normal.y;
+        const placeZ = pos[2] + normal.z;
+
+        // Prevent placing inside player
+        if (!playerCollidesBlock(placeX, placeY, placeZ)) {
+          placeBlock(block, placeX, placeY, placeZ, false);
+        }
       }
     }
   }
@@ -716,9 +722,9 @@ function onMouseMove(event) {
 
 /** Callback for mouse scroll */
 function onScroll(event) {
-  if (event.deltaY > 0) selectedBlock++;
-  else selectedBlock--;
-  selectedBlock = mod(selectedBlock, 6);
+  if (event.deltaY > 0) hotbarIndex++;
+  else hotbarIndex--;
+  hotbarIndex = mod(hotbarIndex, 6);
   updateHotbar();
 }
 
@@ -972,6 +978,9 @@ function onInventorySlotClicked(index) {
       return;
     }
   }
+
+  // Update hotbar if needed
+  if (index < 6) updateHotbar();
 
   updateInventory();
 }
@@ -1740,16 +1749,6 @@ function setupHotbar() {
     img.src = blank_png;
   });
 
-  // Set block images
-  BLOCK_TYPES.forEach((blockType, i) => {
-    // Get image source
-    let texPath = blockType.texPaths[2];
-    if (typeof texPath === "number") texPath = blockType.texPaths[texPath];
-
-    // Set the corresponding image
-    hotbar.children[i].src = texPath;
-  });
-
   // Update
   updateHotbar();
 }
@@ -1867,8 +1866,20 @@ function setupImportMenu() {
 
 /** Update the hotbar to reflect the selected block */
 function updateHotbar() {
+  // Set selected background image
   const selectImgs = [hotbar0_png, hotbar1_png, hotbar2_png, hotbar3_png, hotbar4_png, hotbar5_png];
-  hotbar.style.backgroundImage = `url("${selectImgs[selectedBlock]}")`;
+  hotbar.style.backgroundImage = `url("${selectImgs[hotbarIndex]}")`;
+
+  // Set item images
+  Array.from(hotbar.children).forEach((image, i) => {
+    const item = inventory[i];
+    if (item) {
+      const itemType = ITEM_TYPES[item.id];
+      image.src = itemType.texture;
+    } else {
+      image.src = blank_png;
+    }
+  });
 }
 
 /** Update the inventory UI */
