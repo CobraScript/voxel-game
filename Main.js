@@ -95,7 +95,8 @@ let camOffset = CAM_OFFSET.clone();
 let sprintTapLastTime = 0;
 let isDoubleTapSprinting = false;
 
-const inventory = new Array(30);
+const inventory = new Array(30); // [{ id }]
+let mouseItem;
 
 // UI
 let isUIVisible = true;
@@ -108,6 +109,7 @@ const crosshair = document.getElementById("crosshair");
 const mainMenu = document.getElementById("main-menu");
 const pauseMenu = document.getElementById("pause-menu");
 const inventoryMenu = document.getElementById("inventory-menu");
+const mouseItemElem = document.getElementById("mouse-item");
 const settingsMenu = document.getElementById("settings-menu");
 const createMenu = document.getElementById("create-menu");
 const createSeedInput = document.getElementById("create-seed");
@@ -238,6 +240,7 @@ function init() {
   window.addEventListener("beforeunload", withErrorHandling(onBeforeUnload));
   renderer.domElement.addEventListener("contextmenu", e => e.preventDefault());
   document.addEventListener("mousedown", withErrorHandling(onMouseDown));
+  document.addEventListener("mousemove", withErrorHandling(onMouseMove));
   document.addEventListener("wheel", withErrorHandling(onScroll));
   document.addEventListener("keydown", withErrorHandling(onKeyDown));
   document.addEventListener("keyup", withErrorHandling(onKeyUp));
@@ -703,6 +706,14 @@ function onMouseDown(event) {
   for (const hitbox of blockHitboxes) hitbox.geometry.dispose();
 }
 
+/** Callback for mouse move */
+function onMouseMove(event) {
+  if (!isInventoryOpen) return;
+
+  mouseItemElem.style.left = event.clientX + "px";
+  mouseItemElem.style.top = event.clientY + "px";
+}
+
 /** Callback for mouse scroll */
 function onScroll(event) {
   if (event.deltaY > 0) selectedBlock++;
@@ -936,6 +947,35 @@ function onToggleInventory() {
   }
 }
 
+/** Callback for clicking on an inventory slot */
+function onInventorySlotClicked(index) {
+  if (inventory[index]) {
+    // Inventory slot is filled
+    if (mouseItem) {
+      // Mouse has item: swap
+      const item = mouseItem;
+      mouseItem = inventory[index];
+      inventory[index] = item;
+    } else {
+      // Mouse does not have item: pick up
+      mouseItem = inventory[index];
+      delete inventory[index];
+    }
+  } else {
+    // Inventory slot is not filled
+    if (mouseItem) {
+      // Mouse has item: put down
+      inventory[index] = mouseItem;
+      mouseItem = undefined;
+    } else {
+      // Mouse does not have item: do nothing
+      return;
+    }
+  }
+
+  updateInventory();
+}
+
 /** Callback for clicking settings button */
 function onOpenSettings() {
   settingsMenu.style.display = "flex";
@@ -1048,6 +1088,7 @@ function createWorld() {
 function loadWorld(saveCode) {
   loadSaveCode(saveCode);
   initWorld();
+  setDefaultInventory();
   updateChunksAroundPlayer(false);
   controls.lock();
 }
@@ -1738,6 +1779,7 @@ function setupInventoryMenu() {
     slot.classList.add("inventory-slot");
     slot.dataset.slotid = i;
     const img = document.createElement("img");
+    slot.onmousedown = withErrorHandling(() => onInventorySlotClicked(i));
     slot.appendChild(img);
     inventoryElem.appendChild(slot);
     inventorySlots[i] = slot;
@@ -1750,6 +1792,7 @@ function setupInventoryMenu() {
     slot.classList.add("inventory-slot-hotbar");
     slot.dataset.slotid = i;
     const img = document.createElement("img");
+    slot.onmousedown = withErrorHandling(() => onInventorySlotClicked(i));
     slot.appendChild(img);
     inventoryElem.appendChild(slot);
     inventorySlots[i] = slot;
@@ -1841,6 +1884,15 @@ function updateInventory() {
     } else {
       img.src = blank_png;
     }
+  }
+
+  // Set img src for mouse item
+  const mouseImg = mouseItemElem.children[0];
+  if (mouseItem) {
+    const itemType = ITEM_TYPES[mouseItem.id];
+    mouseImg.src = itemType.texture;
+  } else {
+    mouseImg.src = blank_png;
   }
 }
 

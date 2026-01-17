@@ -80,11 +80,22 @@ body {
   height: 48px;
   top: 3px;
   left: 3px;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 #pause-menu,
 #inventory-menu {
   background-color: #0008;
+}
+
+#mouse-item {
+  position: fixed;
+  width: 54px;
+  height: 54px;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
 #load-list {
