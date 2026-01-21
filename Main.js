@@ -102,6 +102,7 @@ let mouseItem;
 let isUIVisible = true;
 let isPaused = false;
 let isInventoryOpen = false;
+let isInventorySearchOpen = false;
 const inventorySlots = new Array(30);
 const debugElem = document.getElementById("debug");
 const hotbar = document.getElementById("hotbar");
@@ -1747,6 +1748,10 @@ function setupUI() {
 function setupVars() {
   document.documentElement.style.setProperty("--button-img", `url("${button_png}")`);
   document.documentElement.style.setProperty("--inventory-img", `url("${inventory_png}")`);
+  document.documentElement.style.setProperty(
+    "--inventory-search-img",
+    `url("${inventory_search_png}")`
+  );
 }
 
 /** Setup the hotbar */
@@ -1773,12 +1778,14 @@ function setupInventoryMenu() {
   inventoryMenu.style.display = "none";
 
   const inventoryElem = document.getElementById("inventory");
+  const inventorySearchElem = document.getElementById("inventory-search");
+  const leftBtn = document.getElementById("inventory-left");
+  const rightBtn = document.getElementById("inventory-right");
 
   // Create non-hotbar inventory slots
   for (let i = 6; i < 30; i++) {
     const slot = document.createElement("div");
     slot.classList.add("inventory-slot");
-    slot.dataset.slotid = i;
     const img = document.createElement("img");
     slot.onmousedown = withErrorHandling(() => onInventorySlotClicked(i));
     slot.appendChild(img);
@@ -1791,13 +1798,27 @@ function setupInventoryMenu() {
     const slot = document.createElement("div");
     slot.classList.add("inventory-slot");
     slot.classList.add("inventory-slot-hotbar");
-    slot.dataset.slotid = i;
     const img = document.createElement("img");
     slot.onmousedown = withErrorHandling(() => onInventorySlotClicked(i));
     slot.appendChild(img);
     inventoryElem.appendChild(slot);
     inventorySlots[i] = slot;
   }
+
+  inventorySearchElem.style.display = "none";
+
+  leftBtn.src = left_button_png;
+  rightBtn.src = right_button_png;
+  leftBtn.onclick = rightBtn.onclick = withErrorHandling(() => {
+    isInventorySearchOpen = !isInventorySearchOpen;
+    if (isInventorySearchOpen) {
+      inventoryElem.style.display = "none";
+      inventorySearchElem.style.display = "grid";
+    } else {
+      inventoryElem.style.display = "grid";
+      inventorySearchElem.style.display = "none";
+    }
+  });
 }
 
 /** Setup the pause menu */

@@ -1,6 +1,7 @@
 :root {
   --button-img: url("");
   --inventory-img: url("");
+  --inventory-search-img: url("");
 }
 
 html,
@@ -58,6 +59,21 @@ body {
   text-decoration: none;
 }
 
+#inventory-buttons {
+  display: flex;
+  width: 372px;
+  justify-content: space-between;
+}
+
+#inventory-buttons img {
+  width: 24px;
+  height: 36px;
+}
+
+#inventory-buttons img:hover {
+  filter: brightness(0.7);
+}
+
 #inventory {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -66,6 +82,14 @@ body {
   height: 348px;
   padding: 18px 12px 18px 18px;
   background-image: var(--inventory-img);
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+#inventory-search {
+  width: 402px;
+  height: 390px;
+  background-image: var(--inventory-search-img);
   background-repeat: no-repeat;
   background-size: contain;
 }
