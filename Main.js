@@ -11,11 +11,11 @@ const BLOCK_TYPES = [
   { name: "leaves", texPaths: [leaves_png, 0, 0, 0, 0, 0] },
 ];
 const ITEM_TYPES = [
-  { name: "grass", texture: grass_side_png, blockName: "grass" },
-  { name: "dirt", texture: dirt_png, blockName: "dirt" },
-  { name: "stone", texture: stone_png, blockName: "stone" },
-  { name: "wood", texture: log_side_png, blockName: "wood" },
-  { name: "leaves", texture: leaves_png, blockName: "leaves" },
+  { name: "grass", texture: grass_item_png, blockName: "grass" },
+  { name: "dirt", texture: dirt_item_png, blockName: "dirt" },
+  { name: "stone", texture: stone_item_png, blockName: "stone" },
+  { name: "wood", texture: wood_item_png, blockName: "wood" },
+  { name: "leaves", texture: leaves_item_png, blockName: "leaves" },
 ];
 const BLOCK_ID = {}; // { name: id }
 const ITEM_ID = {}; // { name: id }
