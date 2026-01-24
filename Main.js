@@ -4,11 +4,12 @@
 
 // Constants:
 const BLOCK_TYPES = [
-  { name: "grass", texPaths: [grass_png, dirt_png, grass_side_png, 2, 2, 2] },
-  { name: "dirt", texPaths: [dirt_png, 0, 0, 0, 0, 0] },
-  { name: "stone", texPaths: [stone_png, 0, 0, 0, 0, 0] },
-  { name: "wood", texPaths: [log_top_png, 0, log_side_png, 2, 2, 2] },
-  { name: "leaves", texPaths: [leaves_png, 0, 0, 0, 0, 0] },
+  { name: "grass", transparent: false, texPaths: [grass_png, dirt_png, grass_side_png, 2, 2, 2] },
+  { name: "dirt", transparent: false, texPaths: [dirt_png, 0, 0, 0, 0, 0] },
+  { name: "stone", transparent: false, texPaths: [stone_png, 0, 0, 0, 0, 0] },
+  { name: "wood", transparent: false, texPaths: [log_top_png, 0, log_side_png, 2, 2, 2] },
+  { name: "leaves", transparent: false, texPaths: [leaves_png, 0, 0, 0, 0, 0] },
+  { name: "glass", transparent: true, texPaths: [glass_png, 0, 0, 0, 0, 0] },
 ];
 const ITEM_TYPES = [
   { name: "grass", texture: grass_item_png, blockName: "grass" },
@@ -16,6 +17,7 @@ const ITEM_TYPES = [
   { name: "stone", texture: stone_item_png, blockName: "stone" },
   { name: "wood", texture: wood_item_png, blockName: "wood" },
   { name: "leaves", texture: leaves_item_png, blockName: "leaves" },
+  { name: "glass", texture: glass_item_png, blockName: "glass" },
 ];
 const BLOCK_ID = {}; // { name: id }
 const ITEM_ID = {}; // { name: id }
@@ -278,7 +280,15 @@ function generateBlockData() {
         texture.magFilter = THREE.NearestFilter;
         texture.minFilter = THREE.NearestFilter;
 
-        material = new THREE.MeshStandardMaterial({ map: texture });
+        // Setup material settings
+        const settings = { map: texture };
+        if (blockType.transparent) {
+          settings.transparent = true;
+          settings.alphaTest = 0.5;
+          settings.side = THREE.DoubleSide;
+        }
+
+        material = new THREE.MeshStandardMaterial(settings);
       }
 
       blockType.materials.push(material);
@@ -1007,7 +1017,7 @@ function onInventorySearch() {
     const slot = document.createElement("div");
     slot.classList.add("inventory-slot");
     const img = document.createElement("img");
-    slot.onmousedown = withErrorHandling((event) => {
+    slot.onmousedown = withErrorHandling(event => {
       // Set mouse item to the id
       mouseItem = { id: itemID };
       updateInventory();
@@ -1532,12 +1542,26 @@ function generateChunkMesh(ck) {
     }
 
     // Check surroundings and add faces only if needed
-    if (!(chunk.blocks[k + oxn] && x > lxn)) facesByID[block.id][5].push(x, y, z);
-    if (!(chunk.blocks[k + oxp] && x < lxp)) facesByID[block.id][3].push(x, y, z);
-    if (!chunk.blocks[k + oyn]) facesByID[block.id][1].push(x, y, z);
-    if (!chunk.blocks[k + oyp]) facesByID[block.id][0].push(x, y, z);
-    if (!(chunk.blocks[k + ozn] && z > lzn)) facesByID[block.id][2].push(x, y, z);
-    if (!(chunk.blocks[k + ozp] && z < lzp)) facesByID[block.id][4].push(x, y, z);
+    if (x <= lxn || !chunk.blocks[k + oxn] || BLOCK_TYPES[chunk.blocks[k + oxn].id].transparent) {
+      facesByID[block.id][5].push(x, y, z);
+    }
+    if (x >= lxp || !chunk.blocks[k + oxp] || BLOCK_TYPES[chunk.blocks[k + oxp].id].transparent) {
+      facesByID[block.id][3].push(x, y, z);
+    }
+
+    if (!chunk.blocks[k + oyn] || BLOCK_TYPES[chunk.blocks[k + oyn].id].transparent) {
+      facesByID[block.id][1].push(x, y, z);
+    }
+    if (!chunk.blocks[k + oyp] || BLOCK_TYPES[chunk.blocks[k + oyp].id].transparent) {
+      facesByID[block.id][0].push(x, y, z);
+    }
+
+    if (z <= lzn || !chunk.blocks[k + ozn] || BLOCK_TYPES[chunk.blocks[k + ozn].id].transparent) {
+      facesByID[block.id][2].push(x, y, z);
+    }
+    if (z >= lzp || !chunk.blocks[k + ozp] || BLOCK_TYPES[chunk.blocks[k + ozp].id].transparent) {
+      facesByID[block.id][4].push(x, y, z);
+    }
   });
 
   // Construct the faces calculated above
