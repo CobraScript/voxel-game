@@ -9,6 +9,8 @@ const BLOCK_TYPES = [
   { name: "stone", texPaths: [stone_png, 0, 0, 0, 0, 0] },
   { name: "wood", texPaths: [log_top_png, 0, log_side_png, 2, 2, 2] },
   { name: "leaves", texPaths: [leaves_png, 0, 0, 0, 0, 0] },
+  { name: "glass", texPaths: [glass_png, 0, 0, 0, 0, 0], transparent: true },
+  { name: "blue_glass", texPaths: [blue_glass_png, 0, 0, 0, 0, 0], translucent: true },
 ];
 const ITEM_TYPES = [
   { name: "grass", texture: grass_item_png, blockName: "grass" },
@@ -16,6 +18,8 @@ const ITEM_TYPES = [
   { name: "stone", texture: stone_item_png, blockName: "stone" },
   { name: "wood", texture: wood_item_png, blockName: "wood" },
   { name: "leaves", texture: leaves_item_png, blockName: "leaves" },
+  { name: "glass", texture: glass_item_png, blockName: "glass" },
+  { name: "blue_glass", texture: blue_glass_item_png, blockName: "blue_glass" },
 ];
 const BLOCK_ID = {}; // { name: id }
 const ITEM_ID = {}; // { name: id }
@@ -62,7 +66,7 @@ let raycaster;
 
 // World & world gen
 // store chunks by key
-// { "cx,cz": { blocks: [{ id }], mesh, updateMesh, loaded, modified } }
+// { "cx,cz": { blocks: [{ id }], mesh, trnsMeshes, updateMesh, loaded, modified } }
 const chunks = {};
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false });
 const textureLoader = new THREE.TextureLoader();
@@ -260,16 +264,21 @@ function generateBlockData() {
     BLOCK_ID[type.name] = i;
   });
 
+  // Ensure translucent block types are marked transparent
+  BLOCK_TYPES.forEach(type => {
+    if (type.translucent) type.transparent = true;
+  });
+
   // Block type materials
   for (const blockType of Object.values(BLOCK_TYPES)) {
     blockType.materials = [];
+    if (blockType.translucent) blockType.materialsBack = [];
 
     for (const path of blockType.texPaths) {
-      let material;
-
       if (typeof path === "number") {
         // Repeat from previous material
-        material = blockType.materials[path];
+        blockType.materials.push(blockType.materials[path]);
+        blockType.materialsBack?.push(blockType.materialsBack[path]);
       } else {
         // Generate a new material from the texture
         let texture = textureLoader.load(path);
@@ -278,10 +287,26 @@ function generateBlockData() {
         texture.magFilter = THREE.NearestFilter;
         texture.minFilter = THREE.NearestFilter;
 
-        material = new THREE.MeshStandardMaterial({ map: texture });
-      }
+        // Setup material settings
+        const settings = { map: texture };
+        if (blockType.translucent) {
+          settings.transparent = true;
+        } else if (blockType.transparent) {
+          settings.transparent = true;
+          settings.alphaTest = 0.5;
+          settings.side = THREE.DoubleSide;
+        }
 
-      blockType.materials.push(material);
+        const material = new THREE.MeshStandardMaterial(settings);
+        blockType.materials.push(material);
+
+        if (blockType.translucent) {
+          // Set back face materials
+          settings.side = THREE.BackSide;
+          const backMaterial = new THREE.MeshStandardMaterial(settings);
+          blockType.materialsBack.push(backMaterial);
+        }
+      }
     }
   }
 }
@@ -1007,7 +1032,7 @@ function onInventorySearch() {
     const slot = document.createElement("div");
     slot.classList.add("inventory-slot");
     const img = document.createElement("img");
-    slot.onmousedown = withErrorHandling((event) => {
+    slot.onmousedown = withErrorHandling(event => {
       // Set mouse item to the id
       mouseItem = { id: itemID };
       updateInventory();
@@ -1148,6 +1173,7 @@ function destroyWorld() {
   for (const ck of Object.keys(chunks)) {
     if (chunks[ck].mesh) {
       scene.remove(chunks[ck].mesh);
+      chunks[ck].trnsMeshes?.forEach(mesh => scene.remove(mesh));
       chunks[ck].mesh.geometry.dispose();
     }
     delete chunks[ck];
@@ -1380,6 +1406,7 @@ function unloadChunk(chunk) {
   chunk.loaded = false;
 
   scene.remove(chunk.mesh);
+  chunk.trnsMeshes?.forEach(mesh => scene.remove(mesh));
 }
 
 /** Reload a chunk, adding its mesh back into the scene */
@@ -1388,6 +1415,7 @@ function reloadChunk(chunk) {
   chunk.loaded = true;
 
   scene.add(chunk.mesh);
+  chunk.trnsMeshes?.forEach(mesh => scene.add(mesh));
 }
 
 /** Generate, unload, and update chunks based on the player's position */
@@ -1417,9 +1445,13 @@ function updateChunksAroundPlayer(generateOne) {
       const chunk = chunks[ck];
       if (chunk.updateMesh) {
         scene.remove(chunk.mesh);
+        chunk.trnsMeshes?.forEach(mesh => scene.remove(mesh));
         generateChunkMesh(ck);
         chunk.updateMesh = false;
-        if (chunk.loaded) scene.add(chunk.mesh);
+        if (chunk.loaded) {
+          scene.add(chunk.mesh);
+          chunk.trnsMeshes.forEach(mesh => scene.add(mesh));
+        }
 
         if (generateOne) {
           generated = true;
@@ -1468,6 +1500,10 @@ function generateChunkMesh(ck) {
 
   const vertsPerFace = faces.xn.pos.length;
   const idxsPerFace = faces.xn.idx.length;
+
+  // Dispose old trnsMeshes
+  chunk.trnsMeshes?.forEach(mesh => mesh.geometry.dispose());
+  chunk.trnsMeshes = [];
 
   // Keep track of how many vertices have been added
   let vertexCount = 0;
@@ -1531,13 +1567,75 @@ function generateChunkMesh(ck) {
       facesByID[block.id] = [[], [], [], [], [], []];
     }
 
+    const blockType = BLOCK_TYPES[chunk.blocks[k].id];
+
+    // Use seperate mesh for translucent
+    if (blockType.translucent) {
+      const geo = new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
+      const matFront = [
+        blockType.materials[5],
+        blockType.materials[3],
+        blockType.materials[1],
+        blockType.materials[0],
+        blockType.materials[2],
+        blockType.materials[4],
+      ];
+      const matBack = [
+        blockType.materialsBack[5],
+        blockType.materialsBack[3],
+        blockType.materialsBack[1],
+        blockType.materialsBack[0],
+        blockType.materialsBack[2],
+        blockType.materialsBack[4],
+      ];
+      const cubeFront = new THREE.Mesh(geo, matFront);
+      const cubeBack = new THREE.Mesh(geo, matBack);
+
+      cubeFront.position.set(x + CUBE_SIZE / 2, y + CUBE_SIZE / 2, z + CUBE_SIZE / 2);
+      cubeBack.position.set(x + CUBE_SIZE / 2, y + CUBE_SIZE / 2, z + CUBE_SIZE / 2);
+      cubeFront.renderOrder = 1;
+      cubeBack.renderOrder = 0;
+
+      // Prevent z-fighting
+      cubeFront.scale.set(0.999, 0.999, 0.999);
+      cubeBack.scale.set(0.999, 0.999, 0.999);
+
+      chunk.trnsMeshes.push(cubeFront, cubeBack);
+      return;
+    }
+
+    // Add all faces if transparent
+    if (blockType.transparent) {
+      facesByID[block.id][0].push(x, y, z);
+      facesByID[block.id][1].push(x, y, z);
+      facesByID[block.id][2].push(x, y, z);
+      facesByID[block.id][3].push(x, y, z);
+      facesByID[block.id][4].push(x, y, z);
+      facesByID[block.id][5].push(x, y, z);
+      return;
+    }
+
     // Check surroundings and add faces only if needed
-    if (!(chunk.blocks[k + oxn] && x > lxn)) facesByID[block.id][5].push(x, y, z);
-    if (!(chunk.blocks[k + oxp] && x < lxp)) facesByID[block.id][3].push(x, y, z);
-    if (!chunk.blocks[k + oyn]) facesByID[block.id][1].push(x, y, z);
-    if (!chunk.blocks[k + oyp]) facesByID[block.id][0].push(x, y, z);
-    if (!(chunk.blocks[k + ozn] && z > lzn)) facesByID[block.id][2].push(x, y, z);
-    if (!(chunk.blocks[k + ozp] && z < lzp)) facesByID[block.id][4].push(x, y, z);
+    if (x <= lxn || !chunk.blocks[k + oxn] || BLOCK_TYPES[chunk.blocks[k + oxn].id].transparent) {
+      facesByID[block.id][5].push(x, y, z);
+    }
+    if (x >= lxp || !chunk.blocks[k + oxp] || BLOCK_TYPES[chunk.blocks[k + oxp].id].transparent) {
+      facesByID[block.id][3].push(x, y, z);
+    }
+
+    if (!chunk.blocks[k + oyn] || BLOCK_TYPES[chunk.blocks[k + oyn].id].transparent) {
+      facesByID[block.id][1].push(x, y, z);
+    }
+    if (!chunk.blocks[k + oyp] || BLOCK_TYPES[chunk.blocks[k + oyp].id].transparent) {
+      facesByID[block.id][0].push(x, y, z);
+    }
+
+    if (z <= lzn || !chunk.blocks[k + ozn] || BLOCK_TYPES[chunk.blocks[k + ozn].id].transparent) {
+      facesByID[block.id][2].push(x, y, z);
+    }
+    if (z >= lzp || !chunk.blocks[k + ozp] || BLOCK_TYPES[chunk.blocks[k + ozp].id].transparent) {
+      facesByID[block.id][4].push(x, y, z);
+    }
   });
 
   // Construct the faces calculated above
