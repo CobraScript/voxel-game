@@ -292,8 +292,8 @@ function generateBlockData() {
         if (blockType.translucent) {
           settings.transparent = true;
           settings.polygonOffset = true;
-          settings.polygonOffsetFactor = 0.1;
-          settings.polygonOffsetUnits = 0.1;
+          settings.polygonOffsetFactor = 0.05;
+          settings.polygonOffsetUnits = 0.05;
         } else if (blockType.transparent) {
           settings.transparent = true;
           settings.alphaTest = 0.5;
@@ -306,8 +306,8 @@ function generateBlockData() {
         if (blockType.translucent) {
           // Set back face materials
           settings.side = THREE.BackSide;
-          settings.polygonOffsetFactor = -0.1;
-          settings.polygonOffsetUnits = -0.1;
+          settings.polygonOffsetFactor = -0.05;
+          settings.polygonOffsetUnits = -0.05;
           const backMaterial = new THREE.MeshStandardMaterial(settings);
           blockType.materialsBack.push(backMaterial);
         }
@@ -1554,12 +1554,22 @@ function generateChunkMesh(ck) {
   const oyp = CHUNK_SIZE * CHUNK_SIZE;
   const ozn = -1;
   const ozp = 1;
+  const ocxn = CHUNK_SIZE * (CHUNK_SIZE - 1);
+  const ocxp = -CHUNK_SIZE * (CHUNK_SIZE - 1);
+  const oczn = CHUNK_SIZE - 1;
+  const oczp = -CHUNK_SIZE + 1;
 
   // Limits for checking adjacent blocks to prevent checking the next row
   const lxn = cwx;
   const lxp = cwx + CHUNK_SIZE - 1;
   const lzn = cwz;
   const lzp = cwz + CHUNK_SIZE - 1;
+
+  // Adjacent Chunks
+  const cxn = chunks[chunkKey(cx - 1, cz)];
+  const cxp = chunks[chunkKey(cx + 1, cz)];
+  const czn = chunks[chunkKey(cx, cz - 1)];
+  const czp = chunks[chunkKey(cx, cz + 1)];
 
   chunk.blocks.forEach((block, k) => {
     // Calculate world coords
@@ -1572,32 +1582,82 @@ function generateChunkMesh(ck) {
       facesByID[block.id] = [[], [], [], [], [], []];
     }
 
-    const blockType = BLOCK_TYPES[chunk.blocks[k].id];
+    const id = chunk.blocks[k].id;
+    const blockType = BLOCK_TYPES[id];
 
     // Use seperate mesh for translucent
     if (blockType.translucent) {
-      const geo = new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
-      const matFront = [
-        blockType.materials[5],
-        blockType.materials[3],
-        blockType.materials[1],
-        blockType.materials[0],
-        blockType.materials[2],
-        blockType.materials[4],
-      ];
-      const matBack = [
-        blockType.materialsBack[5],
-        blockType.materialsBack[3],
-        blockType.materialsBack[1],
-        blockType.materialsBack[0],
-        blockType.materialsBack[2],
-        blockType.materialsBack[4],
-      ];
-      const cubeBack = new THREE.Mesh(geo, matBack);
-      const cubeFront = new THREE.Mesh(geo, matFront);
+      const pos = [];
+      const norm = [];
+      const uv = [];
+      const idx = [];
+      let numVerts = 0;
 
-      cubeFront.position.set(x + CUBE_SIZE / 2, y + CUBE_SIZE / 2, z + CUBE_SIZE / 2);
-      cubeBack.position.set(x + CUBE_SIZE / 2, y + CUBE_SIZE / 2, z + CUBE_SIZE / 2);
+      const geo = new THREE.BufferGeometry();
+
+      // Helper function to add a face for this mesh
+      function addFaceTranslucent(vertData, matIdx) {
+        // Add group
+        geo.addGroup(idx.length, idxsPerFace, matIdx);
+
+        // Add vertex data
+        pos.push(...vertData.pos.flat());
+        norm.push(...new Array(vertsPerFace).fill(vertData.normal).flat());
+        uv.push(...vertData.uv.flat());
+        idx.push(...vertData.idx.map(i => i + numVerts));
+
+        numVerts += vertsPerFace;
+      }
+
+      // Determine and add faces to the mesh
+      if (
+        x > lxn
+          ? !chunk.blocks[k + oxn] || id != chunk.blocks[k + oxn].id
+          : !cxn.blocks[k + ocxn] || id != cxn.blocks[k + ocxn].id
+      ) {
+        addFaceTranslucent(faces.xn, 5);
+      }
+      if (
+        x < lxp
+          ? !chunk.blocks[k + oxp] || id != chunk.blocks[k + oxp].id
+          : !cxp.blocks[k + ocxp] || id != cxp.blocks[k + ocxp].id
+      ) {
+        addFaceTranslucent(faces.xp, 3);
+      }
+
+      if (!chunk.blocks[k + oyn] || id != chunk.blocks[k + oyn].id) {
+        addFaceTranslucent(faces.yn, 1);
+      }
+      if (!chunk.blocks[k + oyp] || id != chunk.blocks[k + oyp].id) {
+        addFaceTranslucent(faces.yp, 0);
+      }
+
+      if (
+        z > lzn
+          ? !chunk.blocks[k + ozn] || id != chunk.blocks[k + ozn].id
+          : !czn.blocks[k + oczn] || id != czn.blocks[k + oczn].id
+      ) {
+        addFaceTranslucent(faces.zn, 2);
+      }
+      if (
+        z < lzp
+          ? !chunk.blocks[k + ozp] || id != chunk.blocks[k + ozp].id
+          : !czp.blocks[k + oczp] || id != czp.blocks[k + oczp].id
+      ) {
+        addFaceTranslucent(faces.zp, 4);
+      }
+
+      // Construct and add meshes
+      geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pos), 3));
+      geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(norm), 3));
+      geo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(uv), 2));
+      geo.setIndex(idx);
+
+      const cubeBack = new THREE.Mesh(geo, blockType.materialsBack);
+      const cubeFront = new THREE.Mesh(geo, blockType.materials);
+
+      cubeFront.position.set(x, y, z);
+      cubeBack.position.set(x, y, z);
 
       chunk.trnsMeshes.push(cubeBack, cubeFront);
       return;
@@ -1605,12 +1665,18 @@ function generateChunkMesh(ck) {
 
     // Add all faces if transparent except if shared by same block type
     if (blockType.transparent) {
-      const id = chunk.blocks[k].id;
-
-      if (x <= lxn || !chunk.blocks[k + oxn] || id != chunk.blocks[k + oxn].id) {
+      if (
+        x > lxn
+          ? !chunk.blocks[k + oxn] || id != chunk.blocks[k + oxn].id
+          : !cxn.blocks[k + ocxn] || id != cxn.blocks[k + ocxn].id
+      ) {
         facesByID[block.id][5].push(x, y, z);
       }
-      if (x >= lxp || !chunk.blocks[k + oxp] || id != chunk.blocks[k + oxp].id) {
+      if (
+        x < lxp
+          ? !chunk.blocks[k + oxp] || id != chunk.blocks[k + oxp].id
+          : !cxp.blocks[k + ocxp] || id != cxp.blocks[k + ocxp].id
+      ) {
         facesByID[block.id][3].push(x, y, z);
       }
 
@@ -1621,10 +1687,18 @@ function generateChunkMesh(ck) {
         facesByID[block.id][0].push(x, y, z);
       }
 
-      if (z <= lzn || !chunk.blocks[k + ozn] || id != chunk.blocks[k + ozn].id) {
+      if (
+        z > lzn
+          ? !chunk.blocks[k + ozn] || id != chunk.blocks[k + ozn].id
+          : !czn.blocks[k + oczn] || id != czn.blocks[k + oczn].id
+      ) {
         facesByID[block.id][2].push(x, y, z);
       }
-      if (z >= lzp || !chunk.blocks[k + ozp] || id != chunk.blocks[k + ozp].id) {
+      if (
+        z < lzp
+          ? !chunk.blocks[k + ozp] || id != chunk.blocks[k + ozp].id
+          : !czp.blocks[k + oczp] || id != czp.blocks[k + oczp].id
+      ) {
         facesByID[block.id][4].push(x, y, z);
       }
 
