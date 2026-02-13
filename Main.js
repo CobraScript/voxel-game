@@ -577,7 +577,9 @@ function onKeyDown(event) {
       moveControls.up = true;
       break;
     case "ShiftLeft":
-      moveControls.crouch = true;
+      if (!isInventoryOpen) {
+        moveControls.crouch = true;
+      }
       break;
     case "KeyR":
       moveControls.sprint = true;
@@ -647,7 +649,9 @@ function onKeyUp(event) {
       moveControls.right = false;
       break;
     case "Space":
+      if (!isInventoryOpen) {
       moveControls.up = false;
+      }
       break;
     case "ShiftLeft":
       moveControls.crouch = false;
