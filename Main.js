@@ -1215,22 +1215,22 @@ function createBlockRangeHitboxes(x1, y1, z1, x2, y2, z2) {
 
 /** Place a block with the id at the location */
 function placeBlock(id, x, y, z, generated = true) {
+  const [cx, cz] = blockChunkCoords(x, z);
   let chunk = getBlockChunk(x, z);
 
   if (!chunk) {
-    // Chunk doesn't exist - generate it
-    const [cx, cz] = blockChunkCoords(x, z);
-    generateChunk(cx, cz);
-    chunk = getBlockChunk(x, z);
+    // Chunk doesn't exist - stop
+    return;
   }
 
   const [lx, lz] = localCoords(x, z);
 
-  placeBlockLocal(id, lx, y, lz, chunk, generated);
+  placeBlockLocal(id, lx, y, lz, cx, cz, generated);
 }
 
 /** Remove a block at the specified location */
 function removeBlock(x, y, z, generated = true) {
+  const [cx, cz] = blockChunkCoords(x, z);
   const chunk = getBlockChunk(x, z);
 
   // Stop if chunk doesn't exist
@@ -1238,7 +1238,7 @@ function removeBlock(x, y, z, generated = true) {
 
   const [lx, lz] = localCoords(x, z);
 
-  removeBlockLocal(lx, y, lz, chunk, generated);
+  removeBlockLocal(lx, y, lz, cx, cz, generated);
 }
 
 /** Place a block if it is in the chunk */
@@ -1252,8 +1252,10 @@ function removeBlockInChunk(x, y, z, cx, cz, generated = true) {
 }
 
 /** Place a block with local coordinates in a chunk */
-function placeBlockLocal(id, x, y, z, chunk, generated = true) {
+function placeBlockLocal(id, x, y, z, cx, cz, generated = true) {
   const k = lkey(x, y, z);
+  const ck = chunkKey(cx, cz);
+  const chunk = chunks[ck];
 
   // Prevent placing outside world height boundaries
   if (y < MIN_HEIGHT || y > MAX_HEIGHT) return;
@@ -1264,11 +1266,29 @@ function placeBlockLocal(id, x, y, z, chunk, generated = true) {
   chunk.blocks[k] = { id };
   if (!generated) chunk.modified = true;
   chunk.updateMesh = true;
+
+  // Update neighboring chunks if needed
+  if (x === 0) {
+    const cxn = chunks[chunkKey(cx - 1, cz)];
+    if (cxn) cxn.updateMesh = true;
+  } else if (x === CHUNK_SIZE - 1) {
+    const cxp = chunks[chunkKey(cx + 1, cz)];
+    if (cxp) cxp.updateMesh = true;
+  }
+  if (z === 0) {
+    const czn = chunks[chunkKey(cx, cz - 1)];
+    if (czn) czn.updateMesh = true;
+  } else if (z === CHUNK_SIZE - 1) {
+    const czp = chunks[chunkKey(cx, cz + 1)];
+    if (czp) czp.updateMesh = true;
+  }
 }
 
 /** Remove a block with local coordinates in a chunk */
-function removeBlockLocal(x, y, z, chunk, generated = true) {
+function removeBlockLocal(x, y, z, cx, cz, generated = true) {
   const k = lkey(x, y, z);
+  const ck = chunkKey(cx, cz);
+  const chunk = chunks[ck];
 
   // Stop if block doesn't exist
   if (!chunk.blocks[k]) return;
@@ -1276,6 +1296,22 @@ function removeBlockLocal(x, y, z, chunk, generated = true) {
   delete chunk.blocks[k];
   if (!generated) chunk.modified = true;
   chunk.updateMesh = true;
+
+  // Update neighboring chunks if needed
+  if (x === 0) {
+    const cxn = chunks[chunkKey(cx - 1, cz)];
+    if (cxn) cxn.updateMesh = true;
+  } else if (x === CHUNK_SIZE - 1) {
+    const cxp = chunks[chunkKey(cx + 1, cz)];
+    if (cxp) cxp.updateMesh = true;
+  }
+  if (z === 0) {
+    const czn = chunks[chunkKey(cx, cz - 1)];
+    if (czn) czn.updateMesh = true;
+  } else if (z === CHUNK_SIZE - 1) {
+    const czp = chunks[chunkKey(cx, cz + 1)];
+    if (czp) czp.updateMesh = true;
+  }
 }
 
 /** Get the terrain height (y of block above top) at the xz coordinates */
@@ -1377,7 +1413,7 @@ function generateChunk(cx, cz) {
 
         const top = y === height - 1;
         const type = top ? BLOCK_ID.grass : y >= height - 3 ? BLOCK_ID.dirt : BLOCK_ID.stone;
-        placeBlockLocal(type, x, y, z, chunk);
+        placeBlockLocal(type, x, y, z, cx, cz);
       }
     }
   }
@@ -1613,14 +1649,14 @@ function generateChunkMesh(ck) {
       if (
         x > lxn
           ? !chunk.blocks[k + oxn] || id != chunk.blocks[k + oxn].id
-          : !cxn.blocks[k + ocxn] || id != cxn.blocks[k + ocxn].id
+          : !cxn?.blocks[k + ocxn] || id != cxn.blocks[k + ocxn].id
       ) {
         addFaceTranslucent(faces.xn, 5);
       }
       if (
         x < lxp
           ? !chunk.blocks[k + oxp] || id != chunk.blocks[k + oxp].id
-          : !cxp.blocks[k + ocxp] || id != cxp.blocks[k + ocxp].id
+          : !cxp?.blocks[k + ocxp] || id != cxp.blocks[k + ocxp].id
       ) {
         addFaceTranslucent(faces.xp, 3);
       }
@@ -1635,14 +1671,14 @@ function generateChunkMesh(ck) {
       if (
         z > lzn
           ? !chunk.blocks[k + ozn] || id != chunk.blocks[k + ozn].id
-          : !czn.blocks[k + oczn] || id != czn.blocks[k + oczn].id
+          : !czn?.blocks[k + oczn] || id != czn.blocks[k + oczn].id
       ) {
         addFaceTranslucent(faces.zn, 2);
       }
       if (
         z < lzp
           ? !chunk.blocks[k + ozp] || id != chunk.blocks[k + ozp].id
-          : !czp.blocks[k + oczp] || id != czp.blocks[k + oczp].id
+          : !czp?.blocks[k + oczp] || id != czp.blocks[k + oczp].id
       ) {
         addFaceTranslucent(faces.zp, 4);
       }
@@ -1668,14 +1704,14 @@ function generateChunkMesh(ck) {
       if (
         x > lxn
           ? !chunk.blocks[k + oxn] || id != chunk.blocks[k + oxn].id
-          : !cxn.blocks[k + ocxn] || id != cxn.blocks[k + ocxn].id
+          : !cxn?.blocks[k + ocxn] || id != cxn.blocks[k + ocxn].id
       ) {
         facesByID[block.id][5].push(x, y, z);
       }
       if (
         x < lxp
           ? !chunk.blocks[k + oxp] || id != chunk.blocks[k + oxp].id
-          : !cxp.blocks[k + ocxp] || id != cxp.blocks[k + ocxp].id
+          : !cxp?.blocks[k + ocxp] || id != cxp.blocks[k + ocxp].id
       ) {
         facesByID[block.id][3].push(x, y, z);
       }
@@ -1690,14 +1726,14 @@ function generateChunkMesh(ck) {
       if (
         z > lzn
           ? !chunk.blocks[k + ozn] || id != chunk.blocks[k + ozn].id
-          : !czn.blocks[k + oczn] || id != czn.blocks[k + oczn].id
+          : !czn?.blocks[k + oczn] || id != czn.blocks[k + oczn].id
       ) {
         facesByID[block.id][2].push(x, y, z);
       }
       if (
         z < lzp
           ? !chunk.blocks[k + ozp] || id != chunk.blocks[k + ozp].id
-          : !czp.blocks[k + oczp] || id != czp.blocks[k + oczp].id
+          : !czp?.blocks[k + oczp] || id != czp.blocks[k + oczp].id
       ) {
         facesByID[block.id][4].push(x, y, z);
       }
@@ -1706,10 +1742,18 @@ function generateChunkMesh(ck) {
     }
 
     // Check surroundings and add faces only if needed
-    if (x <= lxn || !chunk.blocks[k + oxn] || BLOCK_TYPES[chunk.blocks[k + oxn].id].transparent) {
+    if (
+      x > lxn
+        ? !chunk.blocks[k + oxn] || BLOCK_TYPES[chunk.blocks[k + oxn].id].transparent
+        : !cxn?.blocks[k + ocxn] || BLOCK_TYPES[cxn.blocks[k + ocxn].id].transparent
+    ) {
       facesByID[block.id][5].push(x, y, z);
     }
-    if (x >= lxp || !chunk.blocks[k + oxp] || BLOCK_TYPES[chunk.blocks[k + oxp].id].transparent) {
+    if (
+      x < lxp
+        ? !chunk.blocks[k + oxp] || BLOCK_TYPES[chunk.blocks[k + oxp].id].transparent
+        : !cxp?.blocks[k + ocxp] || BLOCK_TYPES[cxp.blocks[k + ocxp].id].transparent
+    ) {
       facesByID[block.id][3].push(x, y, z);
     }
 
@@ -1720,10 +1764,18 @@ function generateChunkMesh(ck) {
       facesByID[block.id][0].push(x, y, z);
     }
 
-    if (z <= lzn || !chunk.blocks[k + ozn] || BLOCK_TYPES[chunk.blocks[k + ozn].id].transparent) {
+    if (
+      z > lzn
+        ? !chunk.blocks[k + ozn] || BLOCK_TYPES[chunk.blocks[k + ozn].id].transparent
+        : !czn?.blocks[k + oczn] || BLOCK_TYPES[czn.blocks[k + oczn].id].transparent
+    ) {
       facesByID[block.id][2].push(x, y, z);
     }
-    if (z >= lzp || !chunk.blocks[k + ozp] || BLOCK_TYPES[chunk.blocks[k + ozp].id].transparent) {
+    if (
+      z < lzp
+        ? !chunk.blocks[k + ozp] || BLOCK_TYPES[chunk.blocks[k + ozp].id].transparent
+        : !czp?.blocks[k + oczp] || BLOCK_TYPES[czp.blocks[k + oczp].id].transparent
+    ) {
       facesByID[block.id][4].push(x, y, z);
     }
   });
