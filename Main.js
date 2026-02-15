@@ -649,12 +649,22 @@ function onKeyUp(event) {
       moveControls.right = false;
       break;
     case "Space":
+<<<<<<< HEAD
+     
+=======
       if (!isInventoryOpen) {
+>>>>>>> 71195adcc71fff2a0279e77b6fb1708c927e5ffe
       moveControls.up = false;
+<<<<<<< HEAD
+      
+=======
       }
+>>>>>>> 71195adcc71fff2a0279e77b6fb1708c927e5ffe
       break;
     case "ShiftLeft":
+       if (!isInventoryOpen) {
       moveControls.crouch = false;
+       }
       break;
     case "KeyR":
       moveControls.sprint = false;
