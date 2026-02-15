@@ -939,6 +939,20 @@ function onImportSave() {
   if (save) {
     importMenu.style.display = "none";
     mainMenu.style.display = "none";
+      
+  currentWorldName = save.name;
+ 
+    const keys = JSON.parse(localStorage.getItem("voxel_saves"));
+    while (true) {
+      if (currentWorldName) {
+        currentWorldName = prompt(
+          `A world with the name ${currentWorldName} already exists. Enter a different name:`
+        );
+      } 
+
+      if (currentWorldName && !(keys && keys.includes(SAVE_PREFIX + currentWorldName))) break;
+    }
+  
     loadWorld(save);
   }
 }
@@ -1164,7 +1178,8 @@ function createWorld() {
 }
 
 /** Load a world */
-function loadWorld(saveCode) {
+function loadWorld(saveCode) { 
+
   loadSaveCode(saveCode);
   initWorld();
   updateInventory();
