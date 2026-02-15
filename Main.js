@@ -679,12 +679,11 @@ function onKeyUp(event) {
       moveControls.right = false;
       break;
     case "Space":
-    moveControls.up = false;
+      moveControls.up = false;
       break;
     case "ShiftLeft":
-      
-            if (!isInventoryOpen) {
-      moveControls.crouch = false;
+      if (!isInventoryOpen) {
+        moveControls.crouch = false;
       }
       break;
     case "KeyR":
