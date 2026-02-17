@@ -14,9 +14,9 @@ const BIOME_LIST = [
     // BLOCKS
     blocks: {
       surface: "grass",
-      surfaceDepth:1,
+      surfaceDepth: 1,
       subsurface: "dirt",
-      subsurfaceDepth:4,
+      subsurfaceDepth: 4,
       deep: "stone",
     },
 
@@ -35,7 +35,7 @@ const BIOME_LIST = [
       trunkHeightMax: 8,
       wood: "wood",
       leaves: "leaves",
-      treeShape: 'oak'
+      treeShape: "oak",
     },
   },
   {
@@ -45,9 +45,9 @@ const BIOME_LIST = [
 
     // BLOCKS
     blocks: {
-      surfaceDepth:1,
+      surfaceDepth: 1,
       surface: "snow",
-      subsurfaceDepth:1,
+      subsurfaceDepth: 1,
       subsurface: "snowy_grass",
       deep: "stone",
     },
@@ -67,7 +67,7 @@ const BIOME_LIST = [
       trunkHeightMax: 8,
       wood: "wood",
       leaves: "pine_leaves",
-      treeShape: 'pine'
+      treeShape: "pine",
     },
     fogColor: 0x95cee6, // Sky Blue (0xE0F6FF for Snow, 0xE6C288 for Desert)
     fogNear: 50,
@@ -80,9 +80,9 @@ const BIOME_LIST = [
 
     blocks: {
       surface: "grass",
-      surfaceDepth:1,
+      surfaceDepth: 1,
       subsurface: "dirt",
-      subsurfaceDepth:4,
+      subsurfaceDepth: 4,
       deep: "stone",
     },
 
@@ -99,7 +99,7 @@ const BIOME_LIST = [
       trunkHeightMax: 12,
       wood: "wood",
       leaves: "leaves",
-      treeShape: 'oak'
+      treeShape: "oak",
     },
   },
   {
@@ -110,9 +110,9 @@ const BIOME_LIST = [
     // BLOCKS
     blocks: {
       surface: "grass",
-      surfaceDepth:1,
+      surfaceDepth: 1,
       subsurface: "dirt",
-      subsurfaceDepth:4,
+      subsurfaceDepth: 4,
       deep: "stone",
     },
 
@@ -131,7 +131,7 @@ const BIOME_LIST = [
       trunkHeightMax: 9,
       wood: "wood",
       leaves: "leaves",
-      treeShape: 'oak'
+      treeShape: "oak",
     },
   },
   {
@@ -141,9 +141,9 @@ const BIOME_LIST = [
 
     blocks: {
       surface: "sand",
-      surfaceDepth:1,
+      surfaceDepth: 1,
       subsurface: "sand",
-      subsurfaceDepth:4,
+      subsurfaceDepth: 4,
       deep: "stone",
     },
 
@@ -160,7 +160,7 @@ const BIOME_LIST = [
       trunkHeightMax: 5,
       wood: "wood",
       leaves: "leaves",
-      treeShape: 'palm'
+      treeShape: "palm",
     },
   },
   {
@@ -171,9 +171,9 @@ const BIOME_LIST = [
     // BLOCKS
     blocks: {
       surface: "grass",
-      surfaceDepth:1,
+      surfaceDepth: 1,
       subsurface: "dirt",
-      subsurfaceDepth:4,
+      subsurfaceDepth: 4,
       deep: "stone",
     },
 
@@ -192,7 +192,7 @@ const BIOME_LIST = [
       trunkHeightMax: 12,
       wood: "wood",
       leaves: "pine_leaves",
-      treeShape: 'pine'
+      treeShape: "pine",
     },
   },
   {
@@ -202,9 +202,9 @@ const BIOME_LIST = [
 
     // BLOCKS
     blocks: {
-      surfaceDepth:1,
+      surfaceDepth: 1,
       surface: "snow",
-      subsurfaceDepth:1,
+      subsurfaceDepth: 1,
       subsurface: "snowy_grass",
       deep: "stone",
     },
@@ -224,7 +224,7 @@ const BIOME_LIST = [
       trunkHeightMax: 12,
       wood: "wood",
       leaves: "pine_leaves",
-      treeShape: 'pine'
+      treeShape: "pine",
     },
   },
 ];

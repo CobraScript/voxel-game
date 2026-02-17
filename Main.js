@@ -9,12 +9,12 @@ const BLOCK_TYPES = [
   { name: "stone", texPaths: [stone_png, 0, 0, 0, 0, 0] },
   { name: "wood", texPaths: [log_top_png, 0, log_side_png, 2, 2, 2] },
   { name: "leaves", texPaths: [leaves_png, 0, 0, 0, 0, 0] },
-  { name: "sand", texPaths: [sand_block_texture, 0, 0, 0, 0, 0] },
-  { name: "snow", texPaths: [snow_block_texture, 0, 0, 0, 0, 0] },
-  { name: "snowy_grass", texPaths: [snow_block_texture, dirt_png, snowy_grass_textue, 2, 2, 2] },
-  { name: "pine_leaves", texPaths: [pine_leaves_texture, 0, 0, 0, 0, 0] },
-  { name: "oak_planks", texPaths: [oak_planks_texture, 0, 0, 0, 0, 0] },
-  { name: "stone_bricks", texPaths: [stone_bricks_texture, 0, 0, 0, 0, 0] },
+  { name: "sand", texPaths: [sand_png, 0, 0, 0, 0, 0] },
+  { name: "snow", texPaths: [snow_png, 0, 0, 0, 0, 0] },
+  { name: "snowy_grass", texPaths: [snow_png, dirt_png, snowy_grass_png, 2, 2, 2] },
+  { name: "pine_leaves", texPaths: [pine_leaves_png, 0, 0, 0, 0, 0] },
+  { name: "oak_planks", texPaths: [oak_planks_png, 0, 0, 0, 0, 0] },
+  { name: "stone_bricks", texPaths: [stone_bricks_png, 0, 0, 0, 0, 0] },
 ];
 const ITEM_TYPES = [
   { name: "grass", texture: grass_item_png, blockName: "grass" },
@@ -22,12 +22,12 @@ const ITEM_TYPES = [
   { name: "stone", texture: stone_item_png, blockName: "stone" },
   { name: "wood", texture: wood_item_png, blockName: "wood" },
   { name: "leaves", texture: leaves_item_png, blockName: "leaves" },
-  { name: "sand", texture: sand_item_texture, blockName: "sand" },
-  { name: "snow", texture: snow_item_texture, blockName: "snow" },
-  { name: "snowy_grass", texture: snowy_grass_item_texture, blockName: "snowy_grass" },
-  { name: "pine_leaves", texture: pine_leaves_item_texture, blockName: "pine_leaves" },
-  { name: "oak_planks", texture:planks_item_texture, blockName: "oak_planks" },
-  { name: "stone_bricks", texture: stone_bricks_item_texture, blockName: "stone_bricks" },
+  { name: "sand", texture: sand_item_png, blockName: "sand" },
+  { name: "snow", texture: snow_item_png, blockName: "snow" },
+  { name: "snowy_grass", texture: snowy_grass_item_png, blockName: "snowy_grass" },
+  { name: "pine_leaves", texture: pine_leaves_item_png, blockName: "pine_leaves" },
+  { name: "oak_planks", texture: planks_item_png, blockName: "oak_planks" },
+  { name: "stone_bricks", texture: stone_bricks_item_png, blockName: "stone_bricks" },
 ];
 const BLOCK_ID = {}; // { name: id }
 const ITEM_ID = {}; // { name: id }
@@ -43,17 +43,18 @@ const MAX_HEIGHT = 250;
 const CHUNK_SIZE = 16;
 const MAX_TREE_CANOPY_RADIUS = 4;
 
-const PLAYER_SPEED = 4; //4
-const PLAYER_SPRINT_SPEED = 7; //7
+const PLAYER_SPEED = 4;
+const PLAYER_SPRINT_SPEED = 7;
 const PLAYER_CROUCH_SPEED = 2;
-const PLAYER_JUMP_SPEED = 10;//10
+const PLAYER_JUMP_SPEED = 10;
 const SPRINT_DOUBLE_TAP_MAX_DELAY = 500;
 const GRAVITY = 30;
 const PLAYER_SIZE = new THREE.Vector3(0.6, 1.8, 0.6);
 const CAM_OFFSET = new THREE.Vector3(0, 1.6, 0);
 const CAM_OFFSET_CROUCH = new THREE.Vector3(0, 1.2, 0);
 let PLAYER_REACH = 5;
-// /\ I turned it into a "let" variable because we could use if for cool mechanics later.-
+// /\ I turned it into a "let" variable because we could use if for cool mechanics later.
+
 const EPSILON = 1e-6;
 
 // Precompute constants for cave gen
@@ -189,7 +190,7 @@ function blockRng(x, y, z) {
 }
 
 /** Convert a number 0-63 to its base64 representation character */
-function base64char(num) {0x87ceeb
+function base64char(num) {
   if (num < 26) return String.fromCharCode(num + 65); // A-Z: 0-25
   if (num < 52) return String.fromCharCode(num + 71); // a-z: 26-51
   else if (num < 62) return String.fromCharCode(num - 4); // 0-9: 52-61
@@ -221,46 +222,36 @@ function init() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   gameElem.appendChild(renderer.domElement);
 
-  // Old Lights
-  //const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.5);
-  //hemi.position.set(0, 200, 0);
-  //scene.add(hemi);
-
-  //const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-  //dir.position.set(-100, 100, -100);
-  //scene.add(dir);
-
-  //NEW LIGHTS
+  // NEW LIGHTS
 
   // 1. HEMISPHERE LIGHT (Ambient World Light)
-  //SkyColor (Light Blue), GroundColor (Dark Earth), Intensity (Lowered to allow shadows to pop)
-  const hemi = new THREE.HemisphereLight(0x87CEEB, 0x2e2e2e, 0.4); 
+  // SkyColor (Light Blue), GroundColor (Dark Earth), Intensity (Lowered to allow shadows to pop)
+  const hemi = new THREE.HemisphereLight(0x87ceeb, 0x2e2e2e, 0.4);
   hemi.position.set(0, 500, 0);
   scene.add(hemi);
 
   // 2. DIRECTIONAL LIGHT (The Sun)
   const dir = new THREE.DirectionalLight(0xffffee, 0.6);
   dir.position.set(100, 200, 50);
-  dir.castShadow = true; 
+  dir.castShadow = true;
 
   // --- SHADOW CONFIGURATION ---
   // We need a large shadow box to cover the visible chunks
   dir.shadow.mapSize.width = 4096; // High resolution shadows
   dir.shadow.mapSize.height = 4096;
-  
+
   const d = 200; // Shadow render distance (Keep this close to your render distance)
   dir.shadow.camera.left = -d;
   dir.shadow.camera.right = d;
   dir.shadow.camera.top = d;
   dir.shadow.camera.bottom = -d;
-  
-  //Fix "Shadow Acne" (weird lines on blocks)
-  dir.shadow.bias = -0.0005; 
-  
+
+  // Fix "Shadow Acne" (weird lines on blocks)
+  dir.shadow.bias = -0.0005;
+
   scene.add(dir);
-  
-  const custom_fog = scene.fog || new THREE.Fog(0x87CEEB, 50, 300);
-  //initLighting();
+
+  const custom_fog = scene.fog || new THREE.Fog(0x87ceeb, 50, 300);
 
   // Raycasting
   raycaster = new THREE.Raycaster();
@@ -381,48 +372,38 @@ function generateNoiseFunctions(noiseSeed) {
       .reduce((total, n) => total + n, 0);
 }
 
+/** Update the dynamic, biome dependant fog, called every frame */
 function updateDynamicFog() {
-    // If fog is missing, create it instantly so the game doesn't crash
-    if (!scene.fog) {
-        scene.fog = new THREE.Fog(0x87CEEB, 50, 300);
-        scene.background = new THREE.Color(0x87CEEB);
-        return; // Skip this frame to let it initialize
-    }
-    // -------------------------------
+  // If fog is missing, create it instantly so the game doesn't crash
+  if (!scene.fog) {
+    scene.fog = new THREE.Fog(0x87ceeb, 50, 300);
+    scene.background = new THREE.Color(0x87ceeb);
+    return; // Skip this frame to let it initialize
+  }
+  // -------------------------------
 
-    const px = camera.position.x;
-    const pz = camera.position.z;
-    const py = camera.position.y;
-    
-    // Get Biome
-    const biome = getBiomeAt(px, pz);
-    // Default to Sky Blue if biome has no color settings
-    let targetColorHex = (biome && biome.fogColor !== undefined) ? biome.fogColor : 0x87CEEB;
-    let targetNear = (biome && biome.fogNear !== undefined) ? biome.fogNear : 50;
-    let targetFar = (biome && biome.fogFar !== undefined) ? biome.fogFar : 300;
+  const px = camera.position.x;
+  const pz = camera.position.z;
 
-    // Cave Override (Darkness)
-    //const groundHeight = getTerrainHeight(px, pz);
-    //if (py < groundHeight - 20) {
-    //  targetColorHex = 0x000000; 
-    //  targetNear = 25;
-    //  targetFar = 300;
-    //}
-    
-    
-    // Apply Changes
-    const targetColor = new THREE.Color(targetColorHex);
-    scene.fog.color.lerp(targetColor, 0.05);
-    
-    // Sync background if it exists
-    if (scene.background) {
-      scene.background.copy(scene.fog.color);
-    }
+  // Get Biome
+  const biome = getBiomeAt(px, pz);
+  // Default to Sky Blue if biome has no color settings
+  let targetColorHex = biome && biome.fogColor !== undefined ? biome.fogColor : 0x87ceeb;
+  let targetNear = biome && biome.fogNear !== undefined ? biome.fogNear : 50;
+  let targetFar = biome && biome.fogFar !== undefined ? biome.fogFar : 300;
 
-    scene.fog.near += (targetNear - scene.fog.near) * 0.05;
-    scene.fog.far += (targetFar - scene.fog.far) * 0.05;
+  // Apply Changes
+  const targetColor = new THREE.Color(targetColorHex);
+  scene.fog.color.lerp(targetColor, 0.05);
+
+  // Sync background if it exists
+  if (scene.background) {
+    scene.background.copy(scene.fog.color);
+  }
+
+  scene.fog.near += (targetNear - scene.fog.near) * 0.05;
+  scene.fog.far += (targetFar - scene.fog.far) * 0.05;
 }
-
 
 /** Function called every frame for processing and rendering */
 function animate(time) {
@@ -441,10 +422,11 @@ function animate(time) {
   lastFrameTime = time;
 
   // Main frame logic
-  updateDynamicFog()
+  updateDynamicFog();
   calculatePlayerMovement(deltaTime);
   updateChunksAroundPlayer(true);
   updateDebug();
+
   // Render
   renderer.render(scene, camera);
 }
@@ -1099,7 +1081,7 @@ function onInventorySearch() {
     const slot = document.createElement("div");
     slot.classList.add("inventory-slot");
     const img = document.createElement("img");
-    slot.onmousedown = withErrorHandling((event) => {
+    slot.onmousedown = withErrorHandling(event => {
       // Set mouse item to the id
       mouseItem = { id: itemID };
       updateInventory();
@@ -1219,11 +1201,12 @@ function createWorld() {
   inventory = new Array(30);
   updateInventory();
   updateChunksAroundPlayer(false);
-  
+
+  // Calculate spawn height safely
   const spawnRange = 1000;
 
-  const spawnRng = new Alea(`${seed}_spawn`)
-  
+  const spawnRng = new Alea(`${seed}_spawn`);
+
   const spawnX = Math.floor((spawnRng() - 0.5) * 2 * spawnRange);
   const spawnZ = Math.floor((spawnRng() - 0.5) * 2 * spawnRange);
 
@@ -1413,7 +1396,6 @@ function getBiomeAt(x, z) {
 }
 
 /** Check if a block should be air as part of a cave */
-
 function isCave(x, y, z) {
   // Compute threshold to interpolate between CAVE_MIN_THRESHOLD in the middle
   // and 1 at CAVE_MIN_HEIGHT and CAVE_MAX_HEIGHT
@@ -1422,7 +1404,6 @@ function isCave(x, y, z) {
   // 3D Noise check
   return caveNoise(x, y, z) > threshold * CAVE_INTENSITIES_SUM;
 }
-
 
 /** Generator for relative chunk coordinates for chunk generation order */
 function* chunkGenOrder() {
@@ -1447,12 +1428,12 @@ function generateTree(x, y, z, cx, cz, rng, treeConfig) {
 
   const woodID = BLOCK_ID[treeConfig.wood] || BLOCK_ID.wood;
   const leavesID = BLOCK_ID[treeConfig.leaves] || BLOCK_ID.leaves;
-  
+
   // Default to 'oak' if no shape is specified
-  const shape = treeConfig.treeShape || 'oak'; 
+  const shape = treeConfig.treeShape || "oak";
 
   // --- Build the trunk ---
-  // (Common for all trees, though palm trunks are usually taller/thinner visually, 
+  // (Common for all trees, though palm trunks are usually taller/thinner visually,
   // the logic here remains a 1x1 vertical pillar for simplicity)
   for (let i = 0; i < trunkHeight; i++) {
     placeBlockInChunk(woodID, x, y + i, z, cx, cz);
@@ -1461,11 +1442,11 @@ function generateTree(x, y, z, cx, cz, rng, treeConfig) {
   // --- Build the Canopy ---
   const radius = treeConfig.canopyRadius;
 
-  if (shape === 'pine') {
+  if (shape === "pine") {
     // PINE: Conical shape
     // Leaves start roughly 1/3 up the trunk and taper to a point
-    const leavesStartRelative = Math.floor(trunkHeight * 0.3); 
-    const leavesHeight = (trunkHeight - leavesStartRelative) + 2; // +2 to extend slightly past trunk top
+    const leavesStartRelative = Math.floor(trunkHeight * 0.3);
+    const leavesHeight = trunkHeight - leavesStartRelative + 2; // +2 to extend slightly past trunk top
 
     for (let i = 0; i < leavesHeight; i++) {
       // Calculate radius for this specific layer (tapers as i increases)
@@ -1478,17 +1459,16 @@ function generateTree(x, y, z, cx, cz, rng, treeConfig) {
         for (let lz = -Math.ceil(currentRadius); lz <= Math.ceil(currentRadius); lz++) {
           // Circular check for the layer
           if (lx * lx + lz * lz <= currentRadius * currentRadius + 0.5) {
-             // Avoid overwriting the trunk if it's inside the cone
-             if (lx === 0 && lz === 0 && layerY < y + trunkHeight) continue;
-             placeBlockInChunk(leavesID, x + lx, layerY, z + lz, cx, cz);
+            // Avoid overwriting the trunk if it's inside the cone
+            if (lx === 0 && lz === 0 && layerY < y + trunkHeight) continue;
+            placeBlockInChunk(leavesID, x + lx, layerY, z + lz, cx, cz);
           }
         }
       }
     }
     // Add a single "topper" leaf block for a pointy look
     placeBlockInChunk(leavesID, x, y + leavesStartRelative + leavesHeight, z, cx, cz);
-
-  } else if (shape === 'palm') {
+  } else if (shape === "palm") {
     // --- ORGANIC CYCAD / PALM ---
     const topY = y + trunkHeight;
 
@@ -1498,31 +1478,37 @@ function generateTree(x, y, z, cx, cz, rng, treeConfig) {
     // 2. Generate 8 potential frond directions (N, S, E, W + Diagonals)
     // We use vectors to represent direction: [x, z]
     const directions = [
-        [1, 0], [-1, 0], [0, 1], [0, -1],   // Cardinals
-        [1, 1], [-1, 1], [1, -1], [-1, -1]  // Diagonals
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1], // Cardinals
+      [1, 1],
+      [-1, 1],
+      [1, -1],
+      [-1, -1], // Diagonals
     ];
 
     directions.forEach(([dx, dz]) => {
-        // RANDOMIZATION 1: Chance to skip a diagonal frond entirely (makes it look less perfect)
-        if (Math.abs(dx) + Math.abs(dz) === 2 && rng() > 0.7) return;
+      // RANDOMIZATION 1: Chance to skip a diagonal frond entirely (makes it look less perfect)
+      if (Math.abs(dx) + Math.abs(dz) === 2 && rng() > 0.7) return;
 
-        // RANDOMIZATION 2: Random length for this specific frond
-        // Base radius + random variance (-1 to +1)
-        const frondLength = Math.floor(treeConfig.canopyRadius + (rng() * 2 - 1));
+      // RANDOMIZATION 2: Random length for this specific frond
+      // Base radius + random variance (-1 to +1)
+      const frondLength = Math.floor(treeConfig.canopyRadius + (rng() * 2 - 1));
 
-        for (let r = 1; r <= frondLength; r++) {
-            // Calculate exact position
-            const lx = x + (dx * r);
-            const lz = z + (dz * r);
-            
-            // RANDOMIZATION 3: Organic Droop
-            // The further out, the more it drops. 
-            // We add a tiny bit of noise (0.2) so it's not a perfect curve.
-            const drop = Math.floor((r * r) / 5 + (rng() * 0.5));
-            
-            // Place the leaf
-            placeBlockInChunk(leavesID, lx, topY - drop, lz, cx, cz);
-        }
+      for (let r = 1; r <= frondLength; r++) {
+        // Calculate exact position
+        const lx = x + dx * r;
+        const lz = z + dz * r;
+
+        // RANDOMIZATION 3: Organic Droop
+        // The further out, the more it drops.
+        // We add a tiny bit of noise (0.2) so it's not a perfect curve.
+        const drop = Math.floor((r * r) / 5 + rng() * 0.5);
+
+        // Place the leaf
+        placeBlockInChunk(leavesID, lx, topY - drop, lz, cx, cz);
+      }
     });
 
     // 3. Random Coconuts (25% chance per side)
@@ -1530,7 +1516,6 @@ function generateTree(x, y, z, cx, cz, rng, treeConfig) {
     if (rng() > 0.5) placeBlockInChunk(woodID, x - 1, topY - 1, z, cx, cz); // West Coconut
     if (rng() > 0.5) placeBlockInChunk(woodID, x, topY - 1, z + 1, cx, cz); // South Coconut
     if (rng() > 0.5) placeBlockInChunk(woodID, x, topY - 1, z - 1, cx, cz); // North Coconut
-
   } else {
     // OAK: Original Spherical/Blob shape
     const canopyCenterY = y + trunkHeight - 2;
@@ -1578,30 +1563,27 @@ function generateChunk(cx, cz) {
   // Iterate over every column in the chunk
   for (let x = 0; x < CHUNK_SIZE; x++) {
     for (let z = 0; z < CHUNK_SIZE; z++) {
-      
       const wx = startX + x;
       const wz = startZ + z;
 
-  
       const height = getTerrainHeight(wx, wz);
       const biome = getBiomeAt(wx, wz);
 
       const surface_depth = biome.blocks.surfaceDepth || 1;
-      const subsurface_depth = biome.blocks.subsurfaceDepth || 4; 
+      const subsurface_depth = biome.blocks.subsurfaceDepth || 4;
 
       for (let y = 0; y < height; y++) {
-        
         // Check for Cave
         if (isCave(wx, y, wz)) continue;
 
         // Calculate depth from the top
-        const depth = (height - 1) - y;
-        
-        let typeID; 
+        const depth = height - 1 - y;
+
+        let typeID;
 
         if (depth < surface_depth) {
           typeID = BLOCK_ID[biome.blocks.surface];
-        } else if (depth < (surface_depth + subsurface_depth)) {
+        } else if (depth < surface_depth + subsurface_depth) {
           typeID = BLOCK_ID[biome.blocks.subsurface];
         } else {
           typeID = BLOCK_ID[biome.blocks.deep];

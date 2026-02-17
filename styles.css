@@ -31,7 +31,6 @@ body {
   background-repeat: no-repeat;
 }
 
-
 .menu button {
   display: block;
   height: 40px;
@@ -177,6 +176,7 @@ body {
 
 #pause-menu,
 #inventory-menu {
+  background-image: none;
   background-color: #0008;
 }
 
