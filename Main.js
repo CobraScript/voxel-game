@@ -942,18 +942,16 @@ function onImportSave() {
       
   currentWorldName = save.name;
  
-    const keys = JSON.parse(localStorage.getItem("voxel_saves"));
-    while (true) {
-      if (currentWorldName) {
-        currentWorldName = prompt(
-          `A world with the name ${currentWorldName} already exists. Enter a different name:`
-        );
-      } 
-
-      if (currentWorldName && !(keys && keys.includes(SAVE_PREFIX + currentWorldName))) break;
+    const keys = JSON.parse(localStorage.getItem("voxel_saves")) || [];
+ 
+    const newKey = SAVE_PREFIX + currentWorldName
+    if (keys.includes(newKey)) {
+      save.name = prompt("A save with that name already exists, make a new name")
+    } else {
+      loadWorld(save)
     }
   
-    loadWorld(save);
+    
   }
 }
 
