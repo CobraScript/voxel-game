@@ -795,14 +795,14 @@ function onCreate() {
 
   currentWorldName = nameVal;
   seed = createSeedInput.value;
-  if (seed && !Number.isInteger(+seed)) {
-    alert("Seed is not an integer,")
-   return;
-  }
+  // if (seed && !Number.isInteger(+seed)) {
+  //   alert("Seed is not an integer,")
+  //  return;
+  // }
     
 
 
-  else if (!seed) seed = Math.floor(Math.random() * 1000000000000000).toString();
+   if (!seed) seed = Math.floor(Math.random() * 1000000000000000).toString();
 
   createMenu.style.display = "none";
   mainMenu.style.display = "none";
