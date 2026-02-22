@@ -1008,11 +1008,42 @@ function onClearSave() {
 
 /** Callback for clicking import button */
 function onImportSave() {
-  const save = importSaveInput.value;
+  var save = importSaveInput.value;
   if (save) {
-    importMenu.style.display = "none";
-    mainMenu.style.display = "none";
-    loadWorld(save);
+
+ 
+  let json_save = JSON.parse(save)    
+  currentWorldName = json_save.name;
+  console.log(currentWorldName)
+  
+
+ 
+    const keys = JSON.parse(localStorage.getItem("voxel_saves")) || [];
+ console.log(keys)
+    const newKey = 'voxel_save_' + currentWorldName
+    if (keys.includes(newKey)) {
+let new_name = prompt("enter a new name")
+if (new_name == currentWorldName) { 
+  onImportSave(save)
+} else { 
+  json_save.name = new_name
+  save = JSON.stringify(json_save)
+  importMenu.style.display = "none";
+  mainMenu.style.display = "none";
+  loadWorld(save)
+}
+
+
+return;
+
+    } else {
+
+      loadWorld(save)
+      importMenu.style.display = "none";
+      mainMenu.style.display = "none";
+    }
+  
+    
   }
 }
 
