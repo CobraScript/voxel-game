@@ -15,8 +15,7 @@ const BLOCK_TYPES = [
   { name: "pine_leaves", texPaths: [pine_leaves_png, 0, 0, 0, 0, 0] },
   { name: "oak_planks", texPaths: [oak_planks_png, 0, 0, 0, 0, 0] },
   { name: "stone_bricks", texPaths: [stone_bricks_png, 0, 0, 0, 0, 0] },
-  { name: "glass", texPaths: [glass_png, 0, 0, 0, 0, 0], transparent: true },
-  { name: "blue_glass", texPaths: [blue_glass_png, 0, 0, 0, 0, 0], translucent: true },
+  { name: "glass", texPaths: [glass_texture, 0, 0, 0, 0, 0], translucent: true },
 ];
 const ITEM_TYPES = [
   { name: "grass", texture: grass_item_png, blockName: "grass" },
@@ -31,7 +30,6 @@ const ITEM_TYPES = [
   { name: "oak_planks", texture: planks_item_png, blockName: "oak_planks" },
   { name: "stone_bricks", texture: stone_bricks_item_png, blockName: "stone_bricks" },
   { name: "glass", texture: glass_item_png, blockName: "glass" },
-  { name: "blue_glass", texture: blue_glass_item_png, blockName: "blue_glass" },
 ];
 const BLOCK_ID = {}; // { name: id }
 const ITEM_ID = {}; // { name: id }
@@ -47,10 +45,10 @@ const MAX_HEIGHT = 250;
 const CHUNK_SIZE = 16;
 const MAX_TREE_CANOPY_RADIUS = 4;
 
-const PLAYER_SPEED = 4;
-const PLAYER_SPRINT_SPEED = 7;
-const PLAYER_CROUCH_SPEED = 2;
-const PLAYER_JUMP_SPEED = 10;
+const PLAYER_SPEED = 40;//4
+const PLAYER_SPRINT_SPEED = 70;//7
+const PLAYER_CROUCH_SPEED = 2;//2
+const PLAYER_JUMP_SPEED = 100;//10
 const SPRINT_DOUBLE_TAP_MAX_DELAY = 500;
 const GRAVITY = 30;
 const PLAYER_SIZE = new THREE.Vector3(0.6, 1.8, 0.6);
@@ -1008,29 +1006,11 @@ function onClearSave() {
 
 /** Callback for clicking import button */
 function onImportSave() {
-  var save = importSaveInput.value;
+  const save = importSaveInput.value;
   if (save) {
-    let json_save = JSON.parse(save);
-    currentWorldName = json_save.name;
-
-    const keys = JSON.parse(localStorage.getItem("voxel_saves")) || [];
-    const newKey = "voxel_save_" + currentWorldName;
-    if (keys.includes(newKey)) {
-      let new_name = prompt("A world with the same name already exists, please enter a new name");
-      if (new_name === currentWorldName) {
-        onImportSave(save);
-      } else {
-        json_save.name = new_name;
-        save = JSON.stringify(json_save);
-        importMenu.style.display = "none";
-        mainMenu.style.display = "none";
-        loadWorld(save);
-      }
-    } else {
-      loadWorld(save);
-      importMenu.style.display = "none";
-      mainMenu.style.display = "none";
-    }
+    importMenu.style.display = "none";
+    mainMenu.style.display = "none";
+    loadWorld(save);
   }
 }
 
