@@ -9,8 +9,13 @@ const BLOCK_TYPES = [
   { name: "stone", texPaths: [stone_png, 0, 0, 0, 0, 0] },
   { name: "wood", texPaths: [log_top_png, 0, log_side_png, 2, 2, 2] },
   { name: "leaves", texPaths: [leaves_png, 0, 0, 0, 0, 0] },
-  { name: "glass", texPaths: [glass_png, 0, 0, 0, 0, 0], transparent: true },
-  { name: "blue_glass", texPaths: [blue_glass_png, 0, 0, 0, 0, 0], translucent: true },
+  { name: "sand", texPaths: [sand_png, 0, 0, 0, 0, 0] },
+  { name: "snow", texPaths: [snow_png, 0, 0, 0, 0, 0] },
+  { name: "snowy_grass", texPaths: [snow_png, dirt_png, snowy_grass_png, 2, 2, 2] },
+  { name: "pine_leaves", texPaths: [pine_leaves_png, 0, 0, 0, 0, 0] },
+  { name: "oak_planks", texPaths: [oak_planks_png, 0, 0, 0, 0, 0] },
+  { name: "stone_bricks", texPaths: [stone_bricks_png, 0, 0, 0, 0, 0] },
+  { name: "glass", texPaths: [glass_png, 0, 0, 0, 0, 0], translucent: true },
 ];
 const ITEM_TYPES = [
   { name: "grass", texture: grass_item_png, blockName: "grass" },
@@ -18,8 +23,13 @@ const ITEM_TYPES = [
   { name: "stone", texture: stone_item_png, blockName: "stone" },
   { name: "wood", texture: wood_item_png, blockName: "wood" },
   { name: "leaves", texture: leaves_item_png, blockName: "leaves" },
+  { name: "sand", texture: sand_item_png, blockName: "sand" },
+  { name: "snow", texture: snow_item_png, blockName: "snow" },
+  { name: "snowy_grass", texture: snowy_grass_item_png, blockName: "snowy_grass" },
+  { name: "pine_leaves", texture: pine_leaves_item_png, blockName: "pine_leaves" },
+  { name: "oak_planks", texture: planks_item_png, blockName: "oak_planks" },
+  { name: "stone_bricks", texture: stone_bricks_item_png, blockName: "stone_bricks" },
   { name: "glass", texture: glass_item_png, blockName: "glass" },
-  { name: "blue_glass", texture: blue_glass_item_png, blockName: "blue_glass" },
 ];
 const BLOCK_ID = {}; // { name: id }
 const ITEM_ID = {}; // { name: id }
@@ -31,15 +41,9 @@ const CAVE_MAX_HEIGHT = 100;
 const CAVE_INTENSITIES = [15, 5, 1];
 const CAVE_RESOLUTIONS = [0.01, 0.05, 0.2];
 const MIN_HEIGHT = 0;
-const MAX_HEIGHT = 160;
+const MAX_HEIGHT = 250;
 const CHUNK_SIZE = 16;
-const TERRAIN_HEIGHT = 80; // this will affect spawn height as well
-const TERRAIN_INTENSITIES = [24, 8, 4, 2, 1];
-const TERRAIN_RESOLUTIONS = [0.003, 0.01, 0.02, 0.05, 0.1];
-const TREE_CANOPY_RADIUS = 3;
-// Controls how quickly leaf density decreases going further away from the center
-const TREE_FOLIAGE_FALLOFF = 0.2;
-const TREE_CHANCE_PER_BLOCK = 0.002;
+const MAX_TREE_CANOPY_RADIUS = 4;
 
 const PLAYER_SPEED = 4;
 const PLAYER_SPRINT_SPEED = 7;
@@ -72,7 +76,7 @@ const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false });
 const textureLoader = new THREE.TextureLoader();
 let chunkDistance = 5;
 let seed;
-let terrainHeightNoise;
+let biomeNoise;
 let caveNoise;
 
 // Save system variables
@@ -212,7 +216,7 @@ function base64num(char) {
 function init() {
   // Scene
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x87ceeb); // sky blue
+  scene.background = new THREE.Color(); // sky blue
 
   // Renderer & camera
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -220,14 +224,36 @@ function init() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   gameElem.appendChild(renderer.domElement);
 
-  // Lights
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-  hemi.position.set(0, 200, 0);
+  // NEW LIGHTS
+
+  // 1. HEMISPHERE LIGHT (Ambient World Light)
+  // SkyColor (Light Blue), GroundColor (Dark Earth), Intensity (Lowered to allow shadows to pop)
+  const hemi = new THREE.HemisphereLight(0x87ceeb, 0x2e2e2e, 0.4);
+  hemi.position.set(0, 500, 0);
   scene.add(hemi);
 
-  const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-  dir.position.set(-100, 100, -100);
+  // 2. DIRECTIONAL LIGHT (The Sun)
+  const dir = new THREE.DirectionalLight(0xffffee, 0.6);
+  dir.position.set(100, 200, 50);
+  dir.castShadow = true;
+
+  // --- SHADOW CONFIGURATION ---
+  // We need a large shadow box to cover the visible chunks
+  dir.shadow.mapSize.width = 4096; // High resolution shadows
+  dir.shadow.mapSize.height = 4096;
+
+  const d = 200; // Shadow render distance (Keep this close to your render distance)
+  dir.shadow.camera.left = -d;
+  dir.shadow.camera.right = d;
+  dir.shadow.camera.top = d;
+  dir.shadow.camera.bottom = -d;
+
+  // Fix "Shadow Acne" (weird lines on blocks)
+  dir.shadow.bias = -0.0005;
+
   scene.add(dir);
+
+  const custom_fog = scene.fog || new THREE.Fog(0x87ceeb, 50, 300);
 
   // Raycasting
   raycaster = new THREE.Raycaster();
@@ -337,29 +363,74 @@ function initRandom() {
 
 /** Generate the noise functions */
 function generateNoiseFunctions(noiseSeed) {
-  // Generate individual functions
-  const rng = new Alea(noiseSeed);
-  const terrainNoiseFuncs = TERRAIN_INTENSITIES.map(_ => createNoise2D(new Alea(rng())));
-  const caveNoiseFuncs = CAVE_INTENSITIES.map(_ => createNoise3D(new Alea(rng())));
+  // 1. Biome Map Noise
+  const biomeNoiseRng = new Alea(`${noiseSeed}_biome`);
+  const biomeSimplex = createNoise2D(biomeNoiseRng);
+  const bScale = WORLD_SETTINGS.biomeScale;
+  biomeNoise = (x, z) => biomeSimplex(x / bScale, z / bScale);
 
-  // Set the combined function
-  terrainHeightNoise = (x, y) =>
-    terrainNoiseFuncs
-      .map((noise, i) => {
-        const intensity = TERRAIN_INTENSITIES[i];
-        const resolution = TERRAIN_RESOLUTIONS[i];
-        return noise(x * resolution, y * resolution) * intensity;
-      })
-      .reduce((total, n) => total + n, 0);
+  // 2. Per-Biome Noise Arrays
+  BIOME_LIST.forEach(biome => {
+    const biomeRng = new Alea(`${noiseSeed}_${biome.id}`);
 
+    // We map over intensities to create a noise function for each layer
+    const noiseFuncs = biome.terrain.intensities.map(_ => createNoise2D(new Alea(biomeRng())));
+
+    biome.terrainHeightAt = (x, y) =>
+      biome.terrain.baseHeight +
+      noiseFuncs
+        .map(
+          (noise, i) =>
+            noise(x * biome.terrain.resolutions[i], y * biome.terrain.resolutions[i]) *
+            biome.terrain.intensities[i]
+        )
+        .reduce((total, n) => total + n, 0);
+  });
+
+  // 3. Cave noise
+  const caveRng = new Alea(`${noiseSeed}_cave`);
+  const caveNoiseFuncs = CAVE_INTENSITIES.map(_ => createNoise3D(new Alea(caveRng())));
   caveNoise = (x, y, z) =>
     caveNoiseFuncs
-      .map((noise, i) => {
-        const intensity = CAVE_INTENSITIES[i];
-        const resolution = CAVE_RESOLUTIONS[i];
-        return noise(x * resolution, y * resolution, z * resolution) * intensity;
-      })
+      .map(
+        (noise, i) =>
+          noise(x * CAVE_RESOLUTIONS[i], y * CAVE_RESOLUTIONS[i], z * CAVE_RESOLUTIONS[i]) *
+          CAVE_INTENSITIES[i]
+      )
       .reduce((total, n) => total + n, 0);
+}
+
+/** Update the dynamic, biome dependant fog, called every frame */
+function updateDynamicFog() {
+  // If fog is missing, create it instantly so the game doesn't crash
+  if (!scene.fog) {
+    scene.fog = new THREE.Fog(0x87ceeb, 50, 300);
+    scene.background = new THREE.Color(0x87ceeb);
+    return; // Skip this frame to let it initialize
+  }
+  // -------------------------------
+
+  const px = camera.position.x;
+  const pz = camera.position.z;
+
+  // Get Biome
+  const biome = getBiomeAt(px, pz);
+  // Default to Sky Blue if biome has no color settings
+  let targetColorHex = biome && biome.fogColor !== undefined ? biome.fogColor : 0x87ceeb;
+  let targetNear = biome && biome.fogNear !== undefined ? biome.fogNear : 50;
+  let targetFar = biome && biome.fogFar !== undefined ? biome.fogFar : 300;
+
+  // Apply Changes
+  const targetColor = new THREE.Color(targetColorHex);
+  scene.fog.color.lerp(targetColor, 0.05);
+
+  // Sync background if it exists
+  if (scene.background) {
+    scene.background.copy(scene.fog.color);
+  }
+
+  scene.fog.near += (targetNear - scene.fog.near) * 0.05;
+  scene.fog.far += (targetFar - scene.fog.far) * 0.05;
 }
 
 /** Function called every frame for processing and rendering */
@@ -379,6 +450,7 @@ function animate(time) {
   lastFrameTime = time;
 
   // Main frame logic
+  updateDynamicFog();
   calculatePlayerMovement(deltaTime);
   updateChunksAroundPlayer(true);
   updateDebug();
@@ -607,7 +679,9 @@ function onKeyDown(event) {
       moveControls.up = true;
       break;
     case "ShiftLeft":
-      moveControls.crouch = true;
+      if (!isInventoryOpen) {
+        moveControls.crouch = true;
+      }
       break;
     case "KeyR":
       moveControls.sprint = true;
@@ -680,7 +754,9 @@ function onKeyUp(event) {
       moveControls.up = false;
       break;
     case "ShiftLeft":
-      moveControls.crouch = false;
+      if (!isInventoryOpen) {
+        moveControls.crouch = false;
+      }
       break;
     case "KeyR":
       moveControls.sprint = false;
@@ -930,11 +1006,28 @@ function onClearSave() {
 
 /** Callback for clicking import button */
 function onImportSave() {
-  const save = importSaveInput.value;
+  let save = importSaveInput.value;
   if (save) {
-    importMenu.style.display = "none";
-    mainMenu.style.display = "none";
-    loadWorld(save);
+    let jsonSave = JSON.parse(save);
+    currentWorldName = jsonSave.name;
+
+    const keys = JSON.parse(localStorage.getItem("voxel_saves")) || [];
+    const newKey = "voxel_save_" + currentWorldName;
+    if (keys.includes(newKey)) {
+      let newName = prompt(
+        "A world with the same name already exists, please enter a new name or leave blank to overwrite"
+      );
+      if (!newName) newName = currentWorldName;
+      jsonSave.name = newName;
+      save = JSON.stringify(jsonSave);
+      importMenu.style.display = "none";
+      mainMenu.style.display = "none";
+      loadWorld(save);
+    } else {
+      loadWorld(save);
+      importMenu.style.display = "none";
+      mainMenu.style.display = "none";
+    }
   }
 }
 
@@ -1120,6 +1213,7 @@ function getBlockChunk(x, z) {
 /** Determines if there is a block at the specified location */
 function isBlockAt(x, y, z) {
   const chunk = getBlockChunk(x, z);
+  if (!chunk) return false;
   return !!chunk.blocks[key(x, y, z)];
 }
 
@@ -1141,6 +1235,7 @@ function isBlockInChunk(x, z, cx, cz) {
 function findTopBlockY(x, z) {
   const [lx, lz] = localCoords(x, z);
   const chunk = getBlockChunk(x, z);
+  if (!chunk) return null;
   for (let y = MAX_HEIGHT; y >= MIN_HEIGHT; y--) {
     if (isBlockAtLocal(lx, y, lz, chunk)) return y;
   }
@@ -1150,11 +1245,29 @@ function findTopBlockY(x, z) {
 /** Create a new world */
 function createWorld() {
   initWorld();
-  position = new THREE.Vector3(0, TERRAIN_HEIGHT + 1, 0);
+  position = new THREE.Vector3(0, 0, 0);
   controls.getObject().rotation.set(0, 0, 0);
   inventory = new Array(30);
   updateInventory();
   updateChunksAroundPlayer(false);
+
+  // Calculate spawn height safely
+  const spawnRange = 1000;
+
+  const spawnRng = new Alea(`${seed}_spawn`);
+
+  const spawnX = Math.floor((spawnRng() - 0.5) * 2 * spawnRange);
+  const spawnZ = Math.floor((spawnRng() - 0.5) * 2 * spawnRange);
+
+  const groundLevel = findTopBlockY(spawnX, spawnZ);
+
+  // 4. Set the spawn height (Ground level + 2 blocks so you don't spawn inside dirt)
+  const spawnY = groundLevel + 2;
+
+  // 5. Apply the position
+  // We add 0.5 to center the player on the block
+  position = new THREE.Vector3(spawnX + 0.5, spawnY, spawnZ + 0.5);
+
   controls.lock();
 }
 
@@ -1314,10 +1427,54 @@ function removeBlockLocal(x, y, z, cx, cz, generated = true) {
   }
 }
 
-/** Get the terrain height (y of block above top) at the xz coordinates */
+/** Calculates a weighted average height based on biome blending with ARRAY OCTAVES */
 function getTerrainHeight(x, z) {
-  const noise = terrainHeightNoise(x, z);
-  return Math.floor(TERRAIN_HEIGHT + noise);
+  // 1. Get the temperature/biome value at this location (-1 to 1)
+  const temp = biomeNoise(x, z);
+
+  // 2. Blend between two neighboring biomes
+  let biome1;
+  let biome2;
+
+  for (const biome of BIOME_LIST) {
+    if (biome.temperature === temp) {
+      // There's no way right?
+      return Math.floor(biome.terrainHeightAt(x, z));
+    } else if (biome.temperature < temp) {
+      if (!biome1 || biome1.temperature < biome.temperature) biome1 = biome;
+    } else {
+      if (!biome2 || biome2.temperature > biome.temperature) biome2 = biome;
+    }
+  }
+
+  // 3. Blend between the two biomes
+  if (!biome1) return Math.floor(biome2.terrainHeightAt(x, z));
+  if (!biome2) return Math.floor(biome1.terrainHeightAt(x, z));
+
+  const height1 = biome1.terrainHeightAt(x, z);
+  const height2 = biome2.terrainHeightAt(x, z);
+  let t = (temp - biome1.temperature) / (biome2.temperature - biome1.temperature);
+  // Ease in-out blending shape
+  t = t < 0.5 ? 4 * t ** 3 : 4 * (t - 1) ** 3 + 1;
+  const height = height1 * (1 - t) + height2 * t;
+
+  return Math.floor(height);
+}
+
+/** Determines the dominant biome at a location (for block types/trees) */
+function getBiomeAt(x, z) {
+  const temp = biomeNoise(x, z);
+  let bestBiome = BIOME_LIST[0];
+  let minDist = Infinity;
+
+  for (const biome of BIOME_LIST) {
+    const dist = Math.abs(temp - biome.temperature);
+    if (dist < minDist) {
+      minDist = dist;
+      bestBiome = biome;
+    }
+  }
+  return bestBiome;
 }
 
 /** Check if a block should be air as part of a cave */
@@ -1345,31 +1502,117 @@ function* chunkGenOrder() {
 }
 
 /** Generate a tree with root at the specified location */
-function generateTree(x, y, z, cx, cz, rng) {
+function generateTree(x, y, z, cx, cz, rng, treeConfig) {
   // Randomly generate trunk height
-  const minTrunkHeight = 6;
-  const maxTrunkHeight = 8;
+  const minTrunkHeight = treeConfig.trunkHeightMin;
+  const maxTrunkHeight = treeConfig.trunkHeightMax;
   const trunkHeight = minTrunkHeight + Math.floor(rng() * (maxTrunkHeight - minTrunkHeight + 1));
 
-  // Build the trunk
+  const woodID = BLOCK_ID[treeConfig.wood] || BLOCK_ID.wood;
+  const leavesID = BLOCK_ID[treeConfig.leaves] || BLOCK_ID.leaves;
+
+  // Default to 'oak' if no shape is specified
+  const shape = treeConfig.treeShape || "oak";
+
+  // --- Build the trunk ---
+  // (Common for all trees, though palm trunks are usually taller/thinner visually,
+  // the logic here remains a 1x1 vertical pillar for simplicity)
   for (let i = 0; i < trunkHeight; i++) {
-    placeBlockInChunk(BLOCK_ID.wood, x, y + i, z, cx, cz);
+    placeBlockInChunk(woodID, x, y + i, z, cx, cz);
   }
 
-  // Determine canopy position
-  const canopyCenterY = y + trunkHeight - 2;
-  const squareCanopyRadius = TREE_CANOPY_RADIUS * TREE_CANOPY_RADIUS;
+  // --- Build the Canopy ---
+  const radius = treeConfig.canopyRadius;
 
-  // Build a sphere of leaves around the top of the trunk
-  for (let ly = -TREE_CANOPY_RADIUS; ly <= TREE_CANOPY_RADIUS; ly++) {
-    for (let lx = -TREE_CANOPY_RADIUS; lx <= TREE_CANOPY_RADIUS; lx++) {
-      for (let lz = -TREE_CANOPY_RADIUS; lz <= TREE_CANOPY_RADIUS; lz++) {
-        const squareDist = lx * lx + ly * ly + lz * lz;
+  if (shape === "pine") {
+    // PINE: Conical shape
+    // Leaves start roughly 1/3 up the trunk and taper to a point
+    const leavesStartRelative = Math.floor(trunkHeight * 0.3);
+    const leavesHeight = trunkHeight - leavesStartRelative + 2; // +2 to extend slightly past trunk top
 
-        // Create a slightly irregular sphere shape by adding randomness
-        const generateChance = 1 - (squareDist / squareCanopyRadius) * TREE_FOLIAGE_FALLOFF;
-        if (squareDist < squareCanopyRadius && rng() < generateChance) {
-          placeBlockInChunk(BLOCK_ID.leaves, x + lx, canopyCenterY + ly, z + lz, cx, cz);
+    for (let i = 0; i < leavesHeight; i++) {
+      // Calculate radius for this specific layer (tapers as i increases)
+      // Top layer has radius 0, bottom layer has max radius
+      const layerProgress = i / leavesHeight;
+      const currentRadius = radius * (1.0 - layerProgress);
+      const layerY = y + leavesStartRelative + i;
+
+      for (let lx = -Math.ceil(currentRadius); lx <= Math.ceil(currentRadius); lx++) {
+        for (let lz = -Math.ceil(currentRadius); lz <= Math.ceil(currentRadius); lz++) {
+          // Circular check for the layer
+          if (lx * lx + lz * lz <= currentRadius * currentRadius + 0.5) {
+            // Avoid overwriting the trunk if it's inside the cone
+            if (lx === 0 && lz === 0 && layerY < y + trunkHeight) continue;
+            placeBlockInChunk(leavesID, x + lx, layerY, z + lz, cx, cz);
+          }
+        }
+      }
+    }
+    // Add a single "topper" leaf block for a pointy look
+    placeBlockInChunk(leavesID, x, y + leavesStartRelative + leavesHeight, z, cx, cz);
+  } else if (shape === "palm") {
+    // --- ORGANIC CYCAD / PALM ---
+    const topY = y + trunkHeight;
+
+    // 1. The Core (Top of trunk)
+    placeBlockInChunk(leavesID, x, topY, z, cx, cz);
+
+    // 2. Generate 8 potential frond directions (N, S, E, W + Diagonals)
+    // We use vectors to represent direction: [x, z]
+    const directions = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1], // Cardinals
+      [1, 1],
+      [-1, 1],
+      [1, -1],
+      [-1, -1], // Diagonals
+    ];
+
+    directions.forEach(([dx, dz]) => {
+      // RANDOMIZATION 1: Chance to skip a diagonal frond entirely (makes it look less perfect)
+      if (Math.abs(dx) + Math.abs(dz) === 2 && rng() > 0.7) return;
+
+      // RANDOMIZATION 2: Random length for this specific frond
+      // Base radius + random variance (-1 to +1)
+      const frondLength = Math.floor(treeConfig.canopyRadius + (rng() * 2 - 1));
+
+      for (let r = 1; r <= frondLength; r++) {
+        // Calculate exact position
+        const lx = x + dx * r;
+        const lz = z + dz * r;
+
+        // RANDOMIZATION 3: Organic Droop
+        // The further out, the more it drops.
+        // We add a tiny bit of noise (0.2) so it's not a perfect curve.
+        const drop = Math.floor((r * r) / 5 + rng() * 0.5);
+
+        // Place the leaf
+        placeBlockInChunk(leavesID, lx, topY - drop, lz, cx, cz);
+      }
+    });
+
+    // 3. Random Coconuts (25% chance per side)
+    if (rng() > 0.5) placeBlockInChunk(woodID, x + 1, topY - 1, z, cx, cz); // East Coconut
+    if (rng() > 0.5) placeBlockInChunk(woodID, x - 1, topY - 1, z, cx, cz); // West Coconut
+    if (rng() > 0.5) placeBlockInChunk(woodID, x, topY - 1, z + 1, cx, cz); // South Coconut
+    if (rng() > 0.5) placeBlockInChunk(woodID, x, topY - 1, z - 1, cx, cz); // North Coconut
+  } else {
+    // OAK: Original Spherical/Blob shape
+    const canopyCenterY = y + trunkHeight - 2;
+    const squareCanopyRadius = radius * radius;
+
+    for (let ly = -radius; ly <= radius; ly++) {
+      for (let lx = -radius; lx <= radius; lx++) {
+        for (let lz = -radius; lz <= radius; lz++) {
+          const squareDist = lx * lx + ly * ly + lz * lz;
+          // Simple sphere check
+          if (squareDist < squareCanopyRadius) {
+            // Don't replace wood with leaves
+            if (lx === 0 && lz === 0 && ly < 0) continue;
+            placeBlockInChunk(leavesID, x + lx, canopyCenterY + ly, z + lz, cx, cz);
+          }
         }
       }
     }
@@ -1398,41 +1641,60 @@ function generateChunk(cx, cz) {
   const startX = cx * CHUNK_SIZE;
   const startZ = cz * CHUNK_SIZE;
 
-  // Generate terrain
+  // 1. Terrain Pass
+  // Iterate over every column in the chunk
   for (let x = 0; x < CHUNK_SIZE; x++) {
     for (let z = 0; z < CHUNK_SIZE; z++) {
-      // Calculate coordinates & height
       const wx = startX + x;
       const wz = startZ + z;
-      const height = getTerrainHeight(wx, wz);
 
-      // Place blocks
+      const height = getTerrainHeight(wx, wz);
+      const biome = getBiomeAt(wx, wz);
+
+      const surface_depth = biome.blocks.surfaceDepth || 1;
+      const subsurface_depth = biome.blocks.subsurfaceDepth || 4;
+
       for (let y = 0; y < height; y++) {
-        // Check for a cave - if it is a cave, skip placing the block
+        // Check for Cave
         if (isCave(wx, y, wz)) continue;
 
-        const top = y === height - 1;
-        const type = top ? BLOCK_ID.grass : y >= height - 3 ? BLOCK_ID.dirt : BLOCK_ID.stone;
-        placeBlockLocal(type, x, y, z, cx, cz);
+        // Calculate depth from the top
+        const depth = height - 1 - y;
+
+        let typeID;
+
+        if (depth < surface_depth) {
+          typeID = BLOCK_ID[biome.blocks.surface];
+        } else if (depth < surface_depth + subsurface_depth) {
+          typeID = BLOCK_ID[biome.blocks.subsurface];
+        } else {
+          typeID = BLOCK_ID[biome.blocks.deep];
+        }
+
+        // Fallback if block ID is missing
+        if (typeID === undefined) typeID = BLOCK_ID.stone;
+
+        placeBlockLocal(typeID, x, y, z, cx, cz);
       }
     }
   }
-
-  // Generate trees
-  for (let x = -TREE_CANOPY_RADIUS; x < CHUNK_SIZE + TREE_CANOPY_RADIUS; x++) {
-    for (let z = -TREE_CANOPY_RADIUS; z < CHUNK_SIZE + TREE_CANOPY_RADIUS; z++) {
+  // 2. Tree Pass
+  for (let x = -MAX_TREE_CANOPY_RADIUS; x < CHUNK_SIZE + MAX_TREE_CANOPY_RADIUS; x++) {
+    for (let z = -MAX_TREE_CANOPY_RADIUS; z < CHUNK_SIZE + MAX_TREE_CANOPY_RADIUS; z++) {
       // Get location rng
       const wx = startX + x;
       const wz = startZ + z;
       const lrng = locationRng(wx, wz);
 
+      const biome = getBiomeAt(wx, wz);
+
       // Place tree
-      if (lrng() < TREE_CHANCE_PER_BLOCK) {
+      if (lrng() < biome.trees.chance) {
         const height = getTerrainHeight(wx, wz);
 
         // Only generate tree if the ground block exists (is not a cave)
         if (!isCave(wx, height - 1, wz)) {
-          generateTree(wx, height, wz, cx, cz, lrng);
+          generateTree(wx, height, wz, cx, cz, lrng, biome.trees);
         }
       }
     }
@@ -2251,16 +2513,22 @@ function updateInventory() {
 /** Update the debug text */
 function updateDebug() {
   const debug = document.getElementById("debug");
+  const x = Math.floor(position.x);
+  const z = Math.floor(position.z);
+  const b = getBiomeAt(x, z);
+  biome = b.name;
+  const temp = biomeNoise(x, z);
 
   debug.textContent = `
-    FPS:
-      ${Math.round(fps)}
+    FPS: ${Math.round(fps)}
     |
-    Position (x y z):
-      ${position.x.toFixed(2)} ${position.y.toFixed(2)} ${position.z.toFixed(2)}
+    Pos: ${position.x.toFixed(2)} ${position.y.toFixed(2)} ${position.z.toFixed(2)}
     |
-    Rotation (x y):
-      ${THREE.Math.radToDeg(rotation.x).toFixed(2)} ${THREE.Math.radToDeg(rotation.y).toFixed(2)}
+    Rot: ${THREE.Math.radToDeg(rotation.x).toFixed(2)} ${THREE.Math.radToDeg(rotation.y).toFixed(2)}
+    |
+    Biome: ${biome}
+    |
+    Temp: ${temp.toFixed(2)}
   `;
 }
 
