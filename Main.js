@@ -376,28 +376,29 @@ function generateNoiseFunctions(noiseSeed) {
     // We map over intensities to create a noise function for each layer
     const noiseFuncs = biome.terrain.intensities.map(_ => createNoise2D(new Alea(biomeRng())));
 
-    biome.terrainHeightAt = (x, y) =>
-      biome.terrain.baseHeight +
-      noiseFuncs
-        .map(
-          (noise, i) =>
-            noise(x * biome.terrain.resolutions[i], y * biome.terrain.resolutions[i]) *
-            biome.terrain.intensities[i]
-        )
-        .reduce((total, n) => total + n, 0);
+    biome.terrainHeightAt = (x, y) => {
+      let sum = biome.terrain.baseHeight;
+      for (let i = 0; i < noiseFuncs.length; i++) {
+        const noise = noiseFuncs[i];
+        sum += noise(x * biome.terrain.resolutions[i], y * biome.terrain.resolutions[i]) * biome.terrain.intensities[i];
+      }
+      return sum;
+    }
   });
 
   // 3. Cave noise
   const caveRng = new Alea(`${noiseSeed}_cave`);
   const caveNoiseFuncs = CAVE_INTENSITIES.map(_ => createNoise3D(new Alea(caveRng())));
-  caveNoise = (x, y, z) =>
-    caveNoiseFuncs
-      .map(
-        (noise, i) =>
-          noise(x * CAVE_RESOLUTIONS[i], y * CAVE_RESOLUTIONS[i], z * CAVE_RESOLUTIONS[i]) *
-          CAVE_INTENSITIES[i]
-      )
-      .reduce((total, n) => total + n, 0);
+  caveNoise = (x, y, z) => {
+    let sum = 0;
+    for (let i = 0; i < caveNoiseFuncs.length; i++) {
+      const noise = caveNoiseFuncs[i];
+      sum +=
+        noise(x * CAVE_RESOLUTIONS[i], y * CAVE_RESOLUTIONS[i], z * CAVE_RESOLUTIONS[i]) *
+        CAVE_INTENSITIES[i];
+    }
+    return sum;
+  };
 }
 
 /** Update the dynamic, biome dependant fog, called every frame */
