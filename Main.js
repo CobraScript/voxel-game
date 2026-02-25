@@ -1008,22 +1008,21 @@ function onClearSave() {
 function onImportSave() {
   let save = importSaveInput.value;
   if (save) {
-    let json_save = JSON.parse(save);
-    currentWorldName = json_save.name;
+    let jsonSave = JSON.parse(save);
+    currentWorldName = jsonSave.name;
 
     const keys = JSON.parse(localStorage.getItem("voxel_saves")) || [];
     const newKey = "voxel_save_" + currentWorldName;
     if (keys.includes(newKey)) {
-      let new_name = prompt("A world with the same name already exists, please enter a new name");
-      if (new_name === currentWorldName) {
-        onImportSave(save);
-      } else {
-        json_save.name = new_name;
-        save = JSON.stringify(json_save);
-        importMenu.style.display = "none";
-        mainMenu.style.display = "none";
-        loadWorld(save);
-      }
+      let newName = prompt(
+        "A world with the same name already exists, please enter a new name or leave blank to overwrite"
+      );
+      if (!newName) newName = currentWorldName;
+      jsonSave.name = newName;
+      save = JSON.stringify(jsonSave);
+      importMenu.style.display = "none";
+      mainMenu.style.display = "none";
+      loadWorld(save);
     } else {
       loadWorld(save);
       importMenu.style.display = "none";
