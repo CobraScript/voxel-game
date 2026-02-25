@@ -1245,26 +1245,24 @@ function findTopBlockY(x, z) {
 /** Create a new world */
 function createWorld() {
   initWorld();
-  position = new THREE.Vector3(0, 0, 0);
+
+  // Calculate spawn height safely
+  const spawnRange = 1000;
+  const spawnRng = new Alea(`${seed}_spawn`);
+  const spawnX = Math.floor((spawnRng() - 0.5) * 2 * spawnRange);
+  const spawnZ = Math.floor((spawnRng() - 0.5) * 2 * spawnRange);
+
+  position = new THREE.Vector3(spawnX, 0, spawnZ);
   controls.getObject().rotation.set(0, 0, 0);
   inventory = new Array(30);
   updateInventory();
   updateChunksAroundPlayer(false);
 
-  // Calculate spawn height safely
-  const spawnRange = 1000;
-
-  const spawnRng = new Alea(`${seed}_spawn`);
-
-  const spawnX = Math.floor((spawnRng() - 0.5) * 2 * spawnRange);
-  const spawnZ = Math.floor((spawnRng() - 0.5) * 2 * spawnRange);
-
+  // Set the spawn height (Ground level + 2 blocks so you don't spawn inside dirt)
   const groundLevel = findTopBlockY(spawnX, spawnZ);
-
-  // 4. Set the spawn height (Ground level + 2 blocks so you don't spawn inside dirt)
   const spawnY = groundLevel + 2;
 
-  // 5. Apply the position
+  // Apply the position
   // We add 0.5 to center the player on the block
   position = new THREE.Vector3(spawnX + 0.5, spawnY, spawnZ + 0.5);
 
