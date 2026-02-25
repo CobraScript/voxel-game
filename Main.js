@@ -433,6 +433,90 @@ function updateDynamicFog() {
   scene.fog.far += (targetFar - scene.fog.far) * 0.05;
 }
 
+const ParticleManager = {
+  system: null,
+  geometry: null,
+  material: null,
+  activeBiomeId: null,
+  velocities: null,
+
+  // Rebuilds the particle system when you enter a new biome
+  initBiome: function(biome, playerPos) {
+    this.clear(); // Destroy old particles
+    
+    // If biome has no particles, do nothing
+    if (!biome.particles || !biome.particles.enabled) return;
+
+    const config = biome.particles;
+    this.activeBiomeId = biome.id;
+
+    this.geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(config.count * 3);
+    this.velocities = new Float32Array(config.count * 3);
+
+    // Spawn particles in a box around the player
+    const spawnRange = config.range || 60;
+    for(let i = 0; i < config.count * 3; i += 3) {
+      positions[i]     = playerPos.x + (Math.random() - 0.5) * spawnRange;
+      positions[i + 1] = playerPos.y + (Math.random() - 0.5) * (spawnRange / 2);
+      positions[i + 2] = playerPos.z + (Math.random() - 0.5) * spawnRange;
+
+      // Random base velocities for the movement math to use
+      this.velocities[i]     = (Math.random() - 0.5) * 2; // X speed
+      this.velocities[i + 1] = Math.random() * 5 + 2;     // Y speed (e.g., fall speed)
+      this.velocities[i + 2] = (Math.random() - 0.5) * 2; // Z speed
+    }
+
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    // Load your base64 texture from texture.js
+    const texture = new THREE.TextureLoader().load(config.texture);
+
+    this.material = new THREE.PointsMaterial({
+      size: config.size,
+      map: texture,
+      transparent: true,
+      opacity: config.opacity || 0.8,
+      color: config.color || 0xffffff,
+      depthWrite: false, // Prevents particles from glitching behind transparent blocks
+      blending: THREE.NormalBlending
+    });
+
+    this.system = new THREE.Points(this.geometry, this.material);
+    scene.add(this.system);
+  },
+
+  clear: function() {
+    if (this.system) {
+      scene.remove(this.system);
+      this.geometry.dispose();
+      this.material.dispose();
+      this.system = null;
+    }
+    this.activeBiomeId = null;
+  },
+
+  // THE ACTUAL FUNCTION
+  update: function(deltaTime, biome, playerPos) {
+    // 1. Check if we crossed into a new biome
+    if (this.activeBiomeId !== biome.id) {
+      this.initBiome(biome, playerPos);
+    }
+
+    // 2. If no active particles, bail out
+    if (!this.system || !biome.particles || !biome.particles.update) return;
+
+    // 3. Run the custom movement logic defined in the biome config
+    const positions = this.geometry.attributes.position.array;
+    const spawnRange = biome.particles.range || 60;
+    
+    biome.particles.update(positions, this.velocities, deltaTime, playerPos, spawnRange);
+
+    // 4. Tell the GPU to update the visual positions
+    this.geometry.attributes.position.needsUpdate = true;
+  }
+};
+
 /** Function called every frame for processing and rendering */
 function animate(time) {
   requestAnimationFrame(withErrorHandling(animate));
@@ -454,6 +538,9 @@ function animate(time) {
   calculatePlayerMovement(deltaTime);
   updateChunksAroundPlayer(true);
   updateDebug();
+
+  const currentBiome = getBiomeAt(camera.position.x, camera.position.z); 
+  ParticleManager.update(deltaTime, currentBiome, camera.position);
 
   // Render
   renderer.render(scene, camera);
