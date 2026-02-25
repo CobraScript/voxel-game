@@ -15,7 +15,7 @@ const BLOCK_TYPES = [
   { name: "pine_leaves", texPaths: [pine_leaves_png, 0, 0, 0, 0, 0] },
   { name: "oak_planks", texPaths: [oak_planks_png, 0, 0, 0, 0, 0] },
   { name: "stone_bricks", texPaths: [stone_bricks_png, 0, 0, 0, 0, 0] },
-  { name: "glass", texPaths: [glass_texture, 0, 0, 0, 0, 0], translucent: true },
+  { name: "glass", texPaths: [glass_png, 0, 0, 0, 0, 0], translucent: true },
 ];
 const ITEM_TYPES = [
   { name: "grass", texture: grass_item_png, blockName: "grass" },
@@ -45,10 +45,10 @@ const MAX_HEIGHT = 250;
 const CHUNK_SIZE = 16;
 const MAX_TREE_CANOPY_RADIUS = 4;
 
-const PLAYER_SPEED = 4;//4
-const PLAYER_SPRINT_SPEED = 7;//7
-const PLAYER_CROUCH_SPEED = 2;//2
-const PLAYER_JUMP_SPEED = 10;//10
+const PLAYER_SPEED = 4;
+const PLAYER_SPRINT_SPEED = 7;
+const PLAYER_CROUCH_SPEED = 2;
+const PLAYER_JUMP_SPEED = 10;
 const SPRINT_DOUBLE_TAP_MAX_DELAY = 500;
 const GRAVITY = 30;
 const PLAYER_SIZE = new THREE.Vector3(0.6, 1.8, 0.6);
