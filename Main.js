@@ -376,28 +376,31 @@ function generateNoiseFunctions(noiseSeed) {
     // We map over intensities to create a noise function for each layer
     const noiseFuncs = biome.terrain.intensities.map(_ => createNoise2D(new Alea(biomeRng())));
 
-    biome.terrainHeightAt = (x, y) =>
-      biome.terrain.baseHeight +
-      noiseFuncs
-        .map(
-          (noise, i) =>
-            noise(x * biome.terrain.resolutions[i], y * biome.terrain.resolutions[i]) *
-            biome.terrain.intensities[i]
-        )
-        .reduce((total, n) => total + n, 0);
+    biome.terrainHeightAt = (x, y) => {
+      let sum = biome.terrain.baseHeight;
+      for (let i = 0; i < noiseFuncs.length; i++) {
+        const noise = noiseFuncs[i];
+        sum +=
+          noise(x * biome.terrain.resolutions[i], y * biome.terrain.resolutions[i]) *
+          biome.terrain.intensities[i];
+      }
+      return sum;
+    };
   });
 
   // 3. Cave noise
   const caveRng = new Alea(`${noiseSeed}_cave`);
   const caveNoiseFuncs = CAVE_INTENSITIES.map(_ => createNoise3D(new Alea(caveRng())));
-  caveNoise = (x, y, z) =>
-    caveNoiseFuncs
-      .map(
-        (noise, i) =>
-          noise(x * CAVE_RESOLUTIONS[i], y * CAVE_RESOLUTIONS[i], z * CAVE_RESOLUTIONS[i]) *
-          CAVE_INTENSITIES[i]
-      )
-      .reduce((total, n) => total + n, 0);
+  caveNoise = (x, y, z) => {
+    let sum = 0;
+    for (let i = 0; i < caveNoiseFuncs.length; i++) {
+      const noise = caveNoiseFuncs[i];
+      sum +=
+        noise(x * CAVE_RESOLUTIONS[i], y * CAVE_RESOLUTIONS[i], z * CAVE_RESOLUTIONS[i]) *
+        CAVE_INTENSITIES[i];
+    }
+    return sum;
+  };
 }
 
 /** Update the dynamic, biome dependant fog, called every frame */
@@ -1245,26 +1248,24 @@ function findTopBlockY(x, z) {
 /** Create a new world */
 function createWorld() {
   initWorld();
-  position = new THREE.Vector3(0, 0, 0);
+
+  // Calculate spawn height safely
+  const spawnRange = 1000;
+  const spawnRng = new Alea(`${seed}_spawn`);
+  const spawnX = Math.floor((spawnRng() - 0.5) * 2 * spawnRange);
+  const spawnZ = Math.floor((spawnRng() - 0.5) * 2 * spawnRange);
+
+  position = new THREE.Vector3(spawnX, 0, spawnZ);
   controls.getObject().rotation.set(0, 0, 0);
   inventory = new Array(30);
   updateInventory();
   updateChunksAroundPlayer(false);
 
-  // Calculate spawn height safely
-  const spawnRange = 1000;
-
-  const spawnRng = new Alea(`${seed}_spawn`);
-
-  const spawnX = Math.floor((spawnRng() - 0.5) * 2 * spawnRange);
-  const spawnZ = Math.floor((spawnRng() - 0.5) * 2 * spawnRange);
-
+  // Set the spawn height (Ground level + 2 blocks so you don't spawn inside dirt)
   const groundLevel = findTopBlockY(spawnX, spawnZ);
-
-  // 4. Set the spawn height (Ground level + 2 blocks so you don't spawn inside dirt)
   const spawnY = groundLevel + 2;
 
-  // 5. Apply the position
+  // Apply the position
   // We add 0.5 to center the player on the block
   position = new THREE.Vector3(spawnX + 0.5, spawnY, spawnZ + 0.5);
 
@@ -1328,22 +1329,22 @@ function createBlockRangeHitboxes(x1, y1, z1, x2, y2, z2) {
 
 /** Place a block with the id at the location */
 function placeBlock(id, x, y, z, generated = true) {
+  const [cx, cz] = blockChunkCoords(x, z);
   let chunk = getBlockChunk(x, z);
 
   if (!chunk) {
-    // Chunk doesn't exist - generate it
-    const [cx, cz] = blockChunkCoords(x, z);
-    generateChunk(cx, cz);
-    chunk = getBlockChunk(x, z);
+    // Chunk doesn't exist - stop
+    return;
   }
 
   const [lx, lz] = localCoords(x, z);
 
-  placeBlockLocal(id, lx, y, lz, chunk, generated);
+  placeBlockLocal(id, lx, y, lz, cx, cz, generated);
 }
 
 /** Remove a block at the specified location */
 function removeBlock(x, y, z, generated = true) {
+  const [cx, cz] = blockChunkCoords(x, z);
   const chunk = getBlockChunk(x, z);
 
   // Stop if chunk doesn't exist
@@ -1351,7 +1352,7 @@ function removeBlock(x, y, z, generated = true) {
 
   const [lx, lz] = localCoords(x, z);
 
-  removeBlockLocal(lx, y, lz, chunk, generated);
+  removeBlockLocal(lx, y, lz, cx, cz, generated);
 }
 
 /** Place a block if it is in the chunk */
@@ -1365,8 +1366,10 @@ function removeBlockInChunk(x, y, z, cx, cz, generated = true) {
 }
 
 /** Place a block with local coordinates in a chunk */
-function placeBlockLocal(id, x, y, z, chunk, generated = true) {
+function placeBlockLocal(id, x, y, z, cx, cz, generated = true) {
   const k = lkey(x, y, z);
+  const ck = chunkKey(cx, cz);
+  const chunk = chunks[ck];
 
   // Prevent placing outside world height boundaries
   if (y < MIN_HEIGHT || y > MAX_HEIGHT) return;
@@ -1377,11 +1380,29 @@ function placeBlockLocal(id, x, y, z, chunk, generated = true) {
   chunk.blocks[k] = { id };
   if (!generated) chunk.modified = true;
   chunk.updateMesh = true;
+
+  // Update neighboring chunks if needed
+  if (x === 0) {
+    const cxn = chunks[chunkKey(cx - 1, cz)];
+    if (cxn) cxn.updateMesh = true;
+  } else if (x === CHUNK_SIZE - 1) {
+    const cxp = chunks[chunkKey(cx + 1, cz)];
+    if (cxp) cxp.updateMesh = true;
+  }
+  if (z === 0) {
+    const czn = chunks[chunkKey(cx, cz - 1)];
+    if (czn) czn.updateMesh = true;
+  } else if (z === CHUNK_SIZE - 1) {
+    const czp = chunks[chunkKey(cx, cz + 1)];
+    if (czp) czp.updateMesh = true;
+  }
 }
 
 /** Remove a block with local coordinates in a chunk */
-function removeBlockLocal(x, y, z, chunk, generated = true) {
+function removeBlockLocal(x, y, z, cx, cz, generated = true) {
   const k = lkey(x, y, z);
+  const ck = chunkKey(cx, cz);
+  const chunk = chunks[ck];
 
   // Stop if block doesn't exist
   if (!chunk.blocks[k]) return;
@@ -1389,11 +1410,23 @@ function removeBlockLocal(x, y, z, chunk, generated = true) {
   delete chunk.blocks[k];
   if (!generated) chunk.modified = true;
   chunk.updateMesh = true;
-}
 
-// ============================================
-// NEW: BIOME AND TERRAIN LOGIC (ARRAYS)
-// ============================================
+  // Update neighboring chunks if needed
+  if (x === 0) {
+    const cxn = chunks[chunkKey(cx - 1, cz)];
+    if (cxn) cxn.updateMesh = true;
+  } else if (x === CHUNK_SIZE - 1) {
+    const cxp = chunks[chunkKey(cx + 1, cz)];
+    if (cxp) cxp.updateMesh = true;
+  }
+  if (z === 0) {
+    const czn = chunks[chunkKey(cx, cz - 1)];
+    if (czn) czn.updateMesh = true;
+  } else if (z === CHUNK_SIZE - 1) {
+    const czp = chunks[chunkKey(cx, cz + 1)];
+    if (czp) czp.updateMesh = true;
+  }
+}
 
 /** Calculates a weighted average height based on biome blending with ARRAY OCTAVES */
 function getTerrainHeight(x, z) {
@@ -1642,7 +1675,7 @@ function generateChunk(cx, cz) {
         // Fallback if block ID is missing
         if (typeID === undefined) typeID = BLOCK_ID.stone;
 
-        placeBlockLocal(typeID, x, y, z, chunk);
+        placeBlockLocal(typeID, x, y, z, cx, cz);
       }
     }
   }
@@ -1879,14 +1912,14 @@ function generateChunkMesh(ck) {
       if (
         x > lxn
           ? !chunk.blocks[k + oxn] || id != chunk.blocks[k + oxn].id
-          : !cxn.blocks[k + ocxn] || id != cxn.blocks[k + ocxn].id
+          : !cxn?.blocks[k + ocxn] || id != cxn.blocks[k + ocxn].id
       ) {
         addFaceTranslucent(faces.xn, 5);
       }
       if (
         x < lxp
           ? !chunk.blocks[k + oxp] || id != chunk.blocks[k + oxp].id
-          : !cxp.blocks[k + ocxp] || id != cxp.blocks[k + ocxp].id
+          : !cxp?.blocks[k + ocxp] || id != cxp.blocks[k + ocxp].id
       ) {
         addFaceTranslucent(faces.xp, 3);
       }
@@ -1901,14 +1934,14 @@ function generateChunkMesh(ck) {
       if (
         z > lzn
           ? !chunk.blocks[k + ozn] || id != chunk.blocks[k + ozn].id
-          : !czn.blocks[k + oczn] || id != czn.blocks[k + oczn].id
+          : !czn?.blocks[k + oczn] || id != czn.blocks[k + oczn].id
       ) {
         addFaceTranslucent(faces.zn, 2);
       }
       if (
         z < lzp
           ? !chunk.blocks[k + ozp] || id != chunk.blocks[k + ozp].id
-          : !czp.blocks[k + oczp] || id != czp.blocks[k + oczp].id
+          : !czp?.blocks[k + oczp] || id != czp.blocks[k + oczp].id
       ) {
         addFaceTranslucent(faces.zp, 4);
       }
@@ -1934,14 +1967,14 @@ function generateChunkMesh(ck) {
       if (
         x > lxn
           ? !chunk.blocks[k + oxn] || id != chunk.blocks[k + oxn].id
-          : !cxn.blocks[k + ocxn] || id != cxn.blocks[k + ocxn].id
+          : !cxn?.blocks[k + ocxn] || id != cxn.blocks[k + ocxn].id
       ) {
         facesByID[block.id][5].push(x, y, z);
       }
       if (
         x < lxp
           ? !chunk.blocks[k + oxp] || id != chunk.blocks[k + oxp].id
-          : !cxp.blocks[k + ocxp] || id != cxp.blocks[k + ocxp].id
+          : !cxp?.blocks[k + ocxp] || id != cxp.blocks[k + ocxp].id
       ) {
         facesByID[block.id][3].push(x, y, z);
       }
@@ -1956,14 +1989,14 @@ function generateChunkMesh(ck) {
       if (
         z > lzn
           ? !chunk.blocks[k + ozn] || id != chunk.blocks[k + ozn].id
-          : !czn.blocks[k + oczn] || id != czn.blocks[k + oczn].id
+          : !czn?.blocks[k + oczn] || id != czn.blocks[k + oczn].id
       ) {
         facesByID[block.id][2].push(x, y, z);
       }
       if (
         z < lzp
           ? !chunk.blocks[k + ozp] || id != chunk.blocks[k + ozp].id
-          : !czp.blocks[k + oczp] || id != czp.blocks[k + oczp].id
+          : !czp?.blocks[k + oczp] || id != czp.blocks[k + oczp].id
       ) {
         facesByID[block.id][4].push(x, y, z);
       }
@@ -1972,10 +2005,18 @@ function generateChunkMesh(ck) {
     }
 
     // Check surroundings and add faces only if needed
-    if (x <= lxn || !chunk.blocks[k + oxn] || BLOCK_TYPES[chunk.blocks[k + oxn].id].transparent) {
+    if (
+      x > lxn
+        ? !chunk.blocks[k + oxn] || BLOCK_TYPES[chunk.blocks[k + oxn].id].transparent
+        : !cxn?.blocks[k + ocxn] || BLOCK_TYPES[cxn.blocks[k + ocxn].id].transparent
+    ) {
       facesByID[block.id][5].push(x, y, z);
     }
-    if (x >= lxp || !chunk.blocks[k + oxp] || BLOCK_TYPES[chunk.blocks[k + oxp].id].transparent) {
+    if (
+      x < lxp
+        ? !chunk.blocks[k + oxp] || BLOCK_TYPES[chunk.blocks[k + oxp].id].transparent
+        : !cxp?.blocks[k + ocxp] || BLOCK_TYPES[cxp.blocks[k + ocxp].id].transparent
+    ) {
       facesByID[block.id][3].push(x, y, z);
     }
 
@@ -1986,10 +2027,18 @@ function generateChunkMesh(ck) {
       facesByID[block.id][0].push(x, y, z);
     }
 
-    if (z <= lzn || !chunk.blocks[k + ozn] || BLOCK_TYPES[chunk.blocks[k + ozn].id].transparent) {
+    if (
+      z > lzn
+        ? !chunk.blocks[k + ozn] || BLOCK_TYPES[chunk.blocks[k + ozn].id].transparent
+        : !czn?.blocks[k + oczn] || BLOCK_TYPES[czn.blocks[k + oczn].id].transparent
+    ) {
       facesByID[block.id][2].push(x, y, z);
     }
-    if (z >= lzp || !chunk.blocks[k + ozp] || BLOCK_TYPES[chunk.blocks[k + ozp].id].transparent) {
+    if (
+      z < lzp
+        ? !chunk.blocks[k + ozp] || BLOCK_TYPES[chunk.blocks[k + ozp].id].transparent
+        : !czp?.blocks[k + oczp] || BLOCK_TYPES[czp.blocks[k + oczp].id].transparent
+    ) {
       facesByID[block.id][4].push(x, y, z);
     }
   });
