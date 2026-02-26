@@ -380,10 +380,12 @@ function generateNoiseFunctions(noiseSeed) {
       let sum = biome.terrain.baseHeight;
       for (let i = 0; i < noiseFuncs.length; i++) {
         const noise = noiseFuncs[i];
-        sum += noise(x * biome.terrain.resolutions[i], y * biome.terrain.resolutions[i]) * biome.terrain.intensities[i];
+        sum +=
+          noise(x * biome.terrain.resolutions[i], y * biome.terrain.resolutions[i]) *
+          biome.terrain.intensities[i];
       }
       return sum;
-    }
+    };
   });
 
   // 3. Cave noise
