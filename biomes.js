@@ -70,6 +70,7 @@ const BIOME_LIST = [
       leaves: "pine_leaves",
       treeShape: "pine",
     },
+    
     fogColor: 0x95cee6, // Sky Blue (0xE0F6FF for Snow, 0xE6C288 for Desert)
     fogNear: 50,
     fogFar: 200,
@@ -77,23 +78,18 @@ const BIOME_LIST = [
     particles: {
       enabled: true,
       texture: snow_png,
-      count: 20000,
+      count: 200000,
       size: 0.1,
       range: 150, 
-      
+      Yvelocity: 2,
+
       // CUSTOM MOVEMENT:
       update(positions, velocities, dt, playerPos, range) {
         for(let i = 0; i < positions.length; i += 3) {
            // Drift X and Z
           positions[i + 1] -= velocities[i + 1] * dt;
-          positions[i] += Math.sin(dt * velocities[i]) * 30 * dt; 
+          positions[i] += Math.sin(dt * velocities[i]) * 70 * dt; 
           
-          // Loop particles back to the top if they fall below the player
-          if (positions[i + 1] < playerPos.y - 10) {
-            positions[i + 1] = playerPos.y + 30; // Reset height
-            positions[i] = playerPos.x + (Math.random() - 0.5) * range; // Randomize X
-            positions[i + 2] = playerPos.z + (Math.random() - 0.5) * range; // Randomize Z
-          }
         }
       }
     }

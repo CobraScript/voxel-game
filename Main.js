@@ -439,8 +439,9 @@ const ParticleManager = {
   material: null,
   activeBiomeId: null,
   velocities: null,
+  opacity: 0,
+  isFadingOut: false, // Added this to cleanly track fades
 
-  // Rebuilds the particle system when you enter a new biome
   initBiome: function(biome, playerPos) {
     this.clear(); // Destroy old particles
     
@@ -449,10 +450,13 @@ const ParticleManager = {
 
     const config = biome.particles;
     this.activeBiomeId = biome.id;
+    this.isFadingOut = false; // Reset fade state
 
     this.geometry = new THREE.BufferGeometry();
     const positions = new Float32Array(config.count * 3);
     this.velocities = new Float32Array(config.count * 3);
+    
+    const spdY = config.Yvelocity || 2; 
 
     // Spawn particles in a box around the player
     const spawnRange = config.range || 60;
@@ -461,29 +465,27 @@ const ParticleManager = {
       positions[i + 1] = playerPos.y + (Math.random() - 0.5) * (spawnRange / 2);
       positions[i + 2] = playerPos.z + (Math.random() - 0.5) * spawnRange;
 
-      // Random base velocities for the movement math to use
-      this.velocities[i]     = (Math.random() - 0.5) * 2; // X speed
-      this.velocities[i + 1] = Math.random() * 5 + 2;     // Y speed (e.g., fall speed)
-      this.velocities[i + 2] = (Math.random() - 0.5) * 2; // Z speed
+      this.velocities[i]     = (Math.random() - 0.5) * 2;
+      this.velocities[i + 1] = Math.random() * (5 + spdY);
+      this.velocities[i + 2] = (Math.random() - 0.5) * 2;
     }
 
     this.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-    // Load your base64 texture from texture.js
     const texture = new THREE.TextureLoader().load(config.texture);
 
     this.material = new THREE.PointsMaterial({
       size: config.size,
       map: texture,
       transparent: true,
-      opacity: config.opacity || 0.8,
+      opacity: 0, // Start invisible so it can fade in
       color: config.color || 0xffffff,
-      depthWrite: false, // Prevents particles from glitching behind transparent blocks
+      depthWrite: false, 
       blending: THREE.NormalBlending
     });
 
     this.system = new THREE.Points(this.geometry, this.material);
     scene.add(this.system);
+    this.opacity = 0; 
   },
 
   clear: function() {
@@ -494,25 +496,73 @@ const ParticleManager = {
       this.system = null;
     }
     this.activeBiomeId = null;
+    this.isFadingOut = false;
+    this.opacity = 0;
   },
 
-  // THE ACTUAL FUNCTION
   update: function(deltaTime, biome, playerPos) {
-    // 1. Check if we crossed into a new biome
+    // 1. CLEAN BIOME SWITCHING (Fading)
     if (this.activeBiomeId !== biome.id) {
-      this.initBiome(biome, playerPos);
+      if (!biome.particles || !biome.particles.enabled) {
+         // Stepped into a clear biome: Don't clear yet, start the fade out!
+         this.isFadingOut = true;
+         this.activeBiomeId = biome.id; 
+      } else {
+         // Stepped into a NEW weather biome: instantly rebuild
+         this.initBiome(biome, playerPos);
+      }
     }
 
-    // 2. If no active particles, bail out
-    if (!this.system || !biome.particles || !biome.particles.update) return;
+    if (!this.system) return;
 
-    // 3. Run the custom movement logic defined in the biome config
+    // 2. FADE MATH
+    if (this.isFadingOut) {
+       this.opacity -= deltaTime * 2; // Fade out
+       if (this.opacity <= 0) {
+           this.clear(); // Fully invisible, safe to delete
+           return; 
+       }
+    } else {
+       // Fade in
+       const maxOp = (biome.particles && biome.particles.opacity) ? biome.particles.opacity : 0.8;
+       if (this.opacity < maxOp) {
+           this.opacity += deltaTime * 2;
+           if (this.opacity > maxOp) this.opacity = maxOp;
+       }
+    }
+    this.material.opacity = this.opacity;
+
+    // 3. MOVEMENT
     const positions = this.geometry.attributes.position.array;
-    const spawnRange = biome.particles.range || 60;
-    
-    biome.particles.update(positions, this.velocities, deltaTime, playerPos, spawnRange);
+    const spawnRange = (biome.particles && biome.particles.range) || 60;
 
-    // 4. Tell the GPU to update the visual positions
+    if (biome.particles && biome.particles.update && !this.isFadingOut) {
+       // Normal movement
+       biome.particles.update(positions, this.velocities, deltaTime, playerPos, spawnRange);
+    } else {
+       // Fallback movement while fading out in a clear biome
+       for(let i = 0; i < positions.length; i += 3) {
+          positions[i + 1] -= this.velocities[i + 1] * deltaTime;
+       }
+    }
+
+    // 4. BLOCK COLLISION
+    if (typeof isBlockAt === 'function') {
+       for(let i = 0; i < positions.length; i += 3) {
+          const px = Math.floor(positions[i]);
+          const py = Math.floor(positions[i + 1]);
+          const pz = Math.floor(positions[i + 2]);
+
+          if (isBlockAt(px, py, pz)) {
+              // Hit a block! Respawn at the top of the range.
+              positions[i]     = playerPos.x + (Math.random() - 0.5) * spawnRange;
+              positions[i + 1] = playerPos.y + (spawnRange / 2); 
+              positions[i + 2] = playerPos.z + (Math.random() - 0.5) * spawnRange;
+          }
+       }
+    }
+
+    // 5. UPDATE GPU
     this.geometry.attributes.position.needsUpdate = true;
   }
 };
