@@ -437,7 +437,7 @@ function updateDynamicFog() {
 }
 
 const ParticleManager = {
-  system: null,
+  object: null,
   geometry: null,
   material: null,
   activeBiomeId: null,
@@ -445,9 +445,9 @@ const ParticleManager = {
   opacity: 0,
   isFadingOut: false, // Added this to cleanly track fades
 
-  initBiome: function(biome, playerPos) {
+  initBiome(biome, playerPos) {
     this.clear(); // Destroy old particles
-    
+
     // If biome has no particles, do nothing
     if (!biome.particles || !biome.particles.enabled) return;
 
@@ -458,22 +458,22 @@ const ParticleManager = {
     this.geometry = new THREE.BufferGeometry();
     const positions = new Float32Array(config.count * 3);
     this.velocities = new Float32Array(config.count * 3);
-    
-    const spdY = config.Yvelocity || 2; 
+
+    const spdY = config.Yvelocity || 2;
 
     // Spawn particles in a box around the player
     const spawnRange = config.range || 60;
-    for(let i = 0; i < config.count * 3; i += 3) {
-      positions[i]     = playerPos.x + (Math.random() - 0.5) * spawnRange;
+    for (let i = 0; i < config.count * 3; i += 3) {
+      positions[i] = playerPos.x + (Math.random() - 0.5) * spawnRange;
       positions[i + 1] = playerPos.y + (Math.random() - 0.5) * (spawnRange / 2);
       positions[i + 2] = playerPos.z + (Math.random() - 0.5) * spawnRange;
 
-      this.velocities[i]     = (Math.random() - 0.5) * 2;
+      this.velocities[i] = (Math.random() - 0.5) * 2;
       this.velocities[i + 1] = Math.random() * (5 + spdY);
       this.velocities[i + 2] = (Math.random() - 0.5) * 2;
     }
 
-    this.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    this.geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     const texture = new THREE.TextureLoader().load(config.texture);
 
     this.material = new THREE.PointsMaterial({
@@ -482,92 +482,90 @@ const ParticleManager = {
       transparent: true,
       opacity: 0, // Start invisible so it can fade in
       color: config.color || 0xffffff,
-      depthWrite: false, 
-      blending: THREE.NormalBlending
+      depthWrite: false,
+      blending: THREE.NormalBlending,
     });
 
-    this.system = new THREE.Points(this.geometry, this.material);
-    scene.add(this.system);
-    this.opacity = 0; 
+    this.object = new THREE.Points(this.geometry, this.material);
+    scene.add(this.object);
+    this.opacity = 0;
   },
 
-  clear: function() {
-    if (this.system) {
-      scene.remove(this.system);
+  clear() {
+    if (this.object) {
+      scene.remove(this.object);
       this.geometry.dispose();
       this.material.dispose();
-      this.system = null;
+      this.object = null;
     }
     this.activeBiomeId = null;
     this.isFadingOut = false;
     this.opacity = 0;
   },
 
-  update: function(deltaTime, biome, playerPos) {
+  update(deltaTime, biome, playerPos) {
     // 1. CLEAN BIOME SWITCHING (Fading)
     if (this.activeBiomeId !== biome.id) {
       if (!biome.particles || !biome.particles.enabled) {
-         // Stepped into a clear biome: Don't clear yet, start the fade out!
-         this.isFadingOut = true;
-         this.activeBiomeId = biome.id; 
+        // Stepped into a clear biome: Don't clear yet, start the fade out!
+        this.isFadingOut = true;
+        this.activeBiomeId = biome.id;
       } else {
-         // Stepped into a NEW weather biome: instantly rebuild
-         this.initBiome(biome, playerPos);
+        // Stepped into a NEW weather biome: instantly rebuild
+        this.initBiome(biome, playerPos);
       }
     }
 
-    if (!this.system) return;
+    if (!this.object) return;
 
     // 2. FADE MATH
     if (this.isFadingOut) {
-       this.opacity -= deltaTime * 2; // Fade out
-       if (this.opacity <= 0) {
-           this.clear(); // Fully invisible, safe to delete
-           return; 
-       }
+      this.opacity -= deltaTime * 2; // Fade out
+      if (this.opacity <= 0) {
+        this.clear(); // Fully invisible, safe to delete
+        return;
+      }
     } else {
-       // Fade in
-       const maxOp = (biome.particles && biome.particles.opacity) ? biome.particles.opacity : 0.8;
-       if (this.opacity < maxOp) {
-           this.opacity += deltaTime * 2;
-           if (this.opacity > maxOp) this.opacity = maxOp;
-       }
+      // Fade in
+      const maxOp = biome.particles?.opacity ?? 0.8;
+      if (this.opacity < maxOp) {
+        this.opacity += deltaTime * 2;
+        if (this.opacity > maxOp) this.opacity = maxOp;
+      }
     }
     this.material.opacity = this.opacity;
 
     // 3. MOVEMENT
     const positions = this.geometry.attributes.position.array;
-    const spawnRange = (biome.particles && biome.particles.range) || 60;
+    const spawnRange = biome.particles?.range ?? 60;
 
     if (biome.particles && biome.particles.update && !this.isFadingOut) {
-       // Normal movement
-       biome.particles.update(positions, this.velocities, deltaTime, playerPos, spawnRange);
+      // Normal movement
+      biome.particles.update(positions, this.velocities, deltaTime, playerPos, spawnRange);
     } else {
-       // Fallback movement while fading out in a clear biome
-       for(let i = 0; i < positions.length; i += 3) {
-          positions[i + 1] -= this.velocities[i + 1] * deltaTime;
-       }
+      // Fallback movement while fading out in a clear biome
+      for (let i = 0; i < positions.length; i += 3) {
+        positions[i + 1] -= this.velocities[i + 1] * deltaTime;
+      }
     }
 
     // 4. BLOCK COLLISION
-    if (typeof isBlockAt === 'function') {
-       for(let i = 0; i < positions.length; i += 3) {
-          const px = Math.floor(positions[i]);
-          const py = Math.floor(positions[i + 1]);
-          const pz = Math.floor(positions[i + 2]);
+    for (let i = 0; i < positions.length; i += 3) {
+      const px = Math.floor(positions[i]);
+      const py = Math.floor(positions[i + 1]);
+      const pz = Math.floor(positions[i + 2]);
 
-          if (isBlockAt(px, py, pz)) {
-              // Hit a block! Respawn at the top of the range.
-              positions[i]     = playerPos.x + (Math.random() - 0.5) * spawnRange;
-              positions[i + 1] = playerPos.y + (spawnRange / 2); 
-              positions[i + 2] = playerPos.z + (Math.random() - 0.5) * spawnRange;
-          }
-       }
+      if (isBlockAt(px, py, pz)) {
+        // Hit a block! Respawn at the top of the range.
+        positions[i] = playerPos.x + (Math.random() - 0.5) * spawnRange;
+        positions[i + 1] = playerPos.y + spawnRange / 2;
+        positions[i + 2] = playerPos.z + (Math.random() - 0.5) * spawnRange;
+      }
     }
 
     // 5. UPDATE GPU
     this.geometry.attributes.position.needsUpdate = true;
-  }
+  },
 };
 
 /** Function called every frame for processing and rendering */
@@ -592,7 +590,7 @@ function animate(time) {
   updateChunksAroundPlayer(true);
   updateDebug();
 
-  const currentBiome = getBiomeAt(camera.position.x, camera.position.z); 
+  const currentBiome = getBiomeAt(camera.position.x, camera.position.z);
   ParticleManager.update(deltaTime, currentBiome, camera.position);
 
   // Render

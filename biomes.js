@@ -43,7 +43,6 @@ const BIOME_LIST = [
     name: "Extreme Mountains",
     temperature: -0.5,
 
-    
     // BLOCKS
     blocks: {
       surfaceDepth: 1,
@@ -70,7 +69,7 @@ const BIOME_LIST = [
       leaves: "pine_leaves",
       treeShape: "pine",
     },
-    
+
     fogColor: 0x95cee6, // Sky Blue (0xE0F6FF for Snow, 0xE6C288 for Desert)
     fogNear: 50,
     fogFar: 200,
@@ -80,19 +79,20 @@ const BIOME_LIST = [
       texture: snow_png,
       count: 21000,
       size: 0.1,
-      range: 150, 
+      range: 150,
       Yvelocity: 2,
 
       // CUSTOM MOVEMENT:
       update(positions, velocities, dt, playerPos, range) {
-        for(let i = 0; i < positions.length; i += 3) {
-           // Drift X and Z
+        for (let i = 0; i < positions.length; i += 3) {
+          // Drift X and Z
+          const height = positions[i + 1] + playerPos.y;
+          positions[i] += velocities[i] * dt + Math.cos(height) * dt;
           positions[i + 1] -= velocities[i + 1] * dt;
-          positions[i] += Math.sin(dt * velocities[i]) * 70 * dt; 
-          
+          positions[i + 2] += velocities[i + 2] * dt + Math.sin(height) * dt;
         }
-      }
-    }
+      },
+    },
   },
   {
     id: "plains",
@@ -249,4 +249,3 @@ const BIOME_LIST = [
     },
   },
 ];
-
