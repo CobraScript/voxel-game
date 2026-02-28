@@ -78,7 +78,7 @@ const BIOME_LIST = [
     particles: {
       enabled: true,
       texture: snow_png,
-      count: 200000,
+      count: 21000,
       size: 0.1,
       range: 150, 
       Yvelocity: 2,
@@ -249,3 +249,4 @@ const BIOME_LIST = [
     },
   },
 ];
+
